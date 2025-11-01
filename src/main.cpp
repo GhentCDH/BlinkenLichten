@@ -4,7 +4,21 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Arduino.h>
+#include <WebServer.h>
 
+// ================= FORWARD DECLARATIONS =================
+void setupWiFi();
+void setupSerial();
+void setupMDNS();
+void setupFastLED();
+void handleSetBrightness();
+void handleShutdown();
+void handleRainbow();
+void setupWebServer();
+void showAll(CRGB color);
+void rainbowSnakeEffect(int duration_ms);
+void setWarmWhite(int brightness);
+// ========================================================
 
 // ================= USER CONFIG =================
 #define NUM_LEDS   300      // Set to your strip length
@@ -28,14 +42,20 @@ static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);
 
 // WiFi credentials
 const char* ap_ssid = "Cumulus"; 
-const char* ap_password = "blinkenlichten";
+const char* ap_password = "";
+
+// Web server on port 80
+WebServer server(80);
+
+// Flag to control the main loop
+volatile bool shouldRunEffect = false;
+volatile int effectType = 0; // 0: none, 1: rainbow
 
 // Setup WiFi Access Point
 void setupWiFi() {  
   Serial.print("Connecting to WiFi Access Point: ");
   Serial.println(ap_ssid);
   
-  WiFi.mode(WIFI_STA);
   WiFi.begin(ap_ssid, ap_password);
     
   while (WiFi.status() != WL_CONNECTED) {
@@ -44,9 +64,8 @@ void setupWiFi() {
   }
 
   Serial.println();
-  Serial.println("WiFi Access Point created!");
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
   Serial.printf("Connect to: %s\n", ap_ssid);
   Serial.printf("Password: %s\n", ap_password);
 }
@@ -78,17 +97,62 @@ void setupFastLED() {
   FastLED.setBrightness(128); // Set initial brightness (0-255)
 }
 
+// HTTP POST handler for warm white brightness control
+void handleSetBrightness() {
+  if (server.hasArg("brightness")) {
+    int brightness = server.arg("brightness").toInt();
+    setWarmWhite(brightness);
+    server.send(200, "application/json", "{\"status\":\"ok\",\"brightness\":" + String(brightness) + "}");
+    Serial.printf("Set warm white brightness to: %d\n", brightness);
+  } else {
+    server.send(400, "application/json", "{\"error\":\"Missing brightness parameter\"}");
+  }
+}
+
+// HTTP POST handler for shutdown (all lights off)
+void handleShutdown() {
+  showAll(CRGB::Black);
+  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Lights turned off\"}");
+  Serial.println("Lights shutdown");
+}
+
+// HTTP POST handler for rainbow effect
+void handleRainbow() {
+  int duration = 5000; // Default 5000ms
+  if (server.hasArg("duration")) {
+    duration = server.arg("duration").toInt();
+  }
+  rainbowSnakeEffect(duration);
+  server.send(200, "application/json", "{\"status\":\"ok\",\"duration\":" + String(duration) + "}");
+  Serial.printf("Rainbow effect triggered for %d ms\n", duration);
+}
+
+// Setup web server routes
+void setupWebServer() {
+  server.on("/brightness", HTTP_POST, handleSetBrightness);
+  server.on("/shutdown", HTTP_POST, handleShutdown);
+  server.on("/rainbow", HTTP_POST, handleRainbow);
+  server.begin();
+  Serial.println("Web server started");
+}
+
 void setup() {
   setupSerial();
   setupWiFi();
   setupMDNS();
   setupFastLED();
+  setupWebServer();
   delay(100);
 }
 
 void showAll(CRGB color) {
   fill_solid(leds, NUM_LEDS, color);
   FastLED.show();
+  delay(50);
+  fill_solid(leds, NUM_LEDS, color);
+  FastLED.show();
+  FastLED.clear();
+  delay(10);
 }
 
 
@@ -102,6 +166,7 @@ void rainbowSnakeEffect(int duration_ms) {
     FastLED.show();
     delay(200);
   }
+  showAll(CRGB::Black);
 }
 
 // set warm white color for the rbgw leds
@@ -121,33 +186,7 @@ void setWarmWhite(int brightness) {
   FastLED.show();
 }
 
-
-
 void loop() {
-
-  rainbowSnakeEffect(5000); // 5 second rainbow snake effect
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(5000);
-
-
-  setWarmWhite(100); // Set warm white at half brightness
-  delay(500);
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(500);       // Hold for 5 seconds
-  setWarmWhite(50); // Set warm white at half brightness
-  delay(500);
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(500);       // Hold for 5 seconds
-  setWarmWhite(25); // Set warm white at quarter brightness
-  delay(500);
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(500);       // Hold for 5 seconds
-  setWarmWhite(12); // Set warm white at quarter brightness
-  delay(500);
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(500);       // Hold for 5 seconds
-  setWarmWhite(8); // Set warm white at quarter brightness
-  delay(500);
-  showAll(CRGB::Black); // Turn off LEDs
-  delay(500);       // Hold for 5 seconds
+  server.handleClient();
+  delay(10); // Small delay to prevent blocking
 }
