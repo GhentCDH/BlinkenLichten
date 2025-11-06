@@ -1,27 +1,19 @@
 #include <FastLED.h>
 #include "CRGBW-final.h"
-#include <ESPmDNS.h>
-#include <WiFi.h>
-#include <WiFiUdp.h>
 #include <Arduino.h>
-#include <WebServer.h>
 #include <EEPROM.h>
 
 // ================= FORWARD DECLARATIONS =================
-void setupWiFi();
 void setupSerial();
-void setupMDNS();
 void setupFastLED();
-void handleSetBrightness();
-void handleShutdown();
-void handleRainbow();
-void setupWebServer();
-void handleRoot();
+void handleSerialCommand();
+void processCommand(String commandBuffer);
 void showAll(CRGB color);
-void rainbowSnakeEffect(int duration_ms);
 void setWarmWhite(int brightness);
 void saveToEeprom(int brightness);
 int loadFromEeprom();
+void rainbowSnakeEffect(int duration_ms);
+void flashRedEffect(int duration_ms);
 // ========================================================
 
 // ================= USER CONFIG =================
@@ -44,267 +36,9 @@ Rgbw rgbw = Rgbw(
 typedef SK6812<DATA_PIN, RGB> ControllerT;
 static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);
 
-// WiFi credentials
-const char* ap_ssid = "Cumulus"; 
-const char* ap_password = "";
-
-// Web server on port 80
-WebServer server(80);
-
 // EEPROM configuration
 #define EEPROM_SIZE 32
 #define BRIGHTNESS_ADDR 0
-
-// Flag to control the main loop
-volatile bool shouldRunEffect = false;
-volatile int effectType = 0; // 0: none, 1: rainbow
-volatile int pendingBrightness = -1; // -1 = no pending request
-volatile bool rainbowRequested = false;
-volatile unsigned long rainbowDuration = 5000;
-volatile bool shutdownRequested = false;
-volatile unsigned long rainbowStartTime = 0;
-
-// Current brightness level (0-100)
-int currentBrightness = 50;
-int previousBrightness = 50;
-
-// HTML Web Interface
-const char* htmlPage = R"rawHTML(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BlinkenLichten Control</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    
-    .container {
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      padding: 40px;
-      max-width: 400px;
-      width: 100%;
-    }
-    
-    h1 {
-      color: #333;
-      margin-bottom: 10px;
-      font-size: 28px;
-      text-align: center;
-    }
-    
-    .subtitle {
-      color: #666;
-      text-align: center;
-      margin-bottom: 30px;
-      font-size: 14px;
-    }
-    
-    .control-group {
-      margin-bottom: 30px;
-    }
-    
-    label {
-      display: block;
-      color: #333;
-      font-weight: 600;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    
-    input[type="range"] {
-      width: 100%;
-      height: 8px;
-      border-radius: 5px;
-      background: #e0e0e0;
-      outline: none;
-      -webkit-appearance: none;
-      cursor: pointer;
-    }
-    
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #667eea;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
-      transition: all 0.2s;
-    }
-    
-    input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.1);
-      background: #764ba2;
-    }
-    
-    input[type="range"]::-moz-range-thumb {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #667eea;
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
-      transition: all 0.2s;
-    }
-    
-    .value-display {
-      text-align: right;
-      color: #667eea;
-      font-weight: bold;
-      font-size: 16px;
-      margin-top: 8px;
-    }
-    
-    .button-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 15px;
-    }
-    
-    button {
-      padding: 14px 20px;
-      border: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.3s;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    .btn-rainbow {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      grid-column: 1 / -1;
-    }
-    
-    .btn-rainbow:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-    }
-    
-    .btn-rainbow:active {
-      transform: translateY(0);
-    }
-    
-    .btn-shutdown {
-      background: #ff6b6b;
-      color: white;
-    }
-    
-    .btn-shutdown:hover {
-      background: #ff5252;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
-    }
-    
-    .btn-shutdown:active {
-      transform: translateY(0);
-    }
-    
-    .status {
-      text-align: center;
-      color: #999;
-      font-size: 12px;
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #eee;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>BlinkenLichten</h1>
-    <p class="subtitle">LED Strip Controller</p>
-    
-    <div class="control-group">
-      <label for="brightness">Brightness</label>
-      <input type="range" id="brightness" min="0" max="100" value="50">
-      <div class="value-display"><span id="brightnessValue">50</span>%</div>
-    </div>
-    
-    <div class="button-group">
-      <button class="btn-rainbow" onclick="triggerRainbow()">Rainbow Effect</button>
-    </div>
-    
-    <div class="button-group">
-      <button class="btn-shutdown" onclick="shutdownLights()">Shutdown</button>
-    </div>
-    
-    <div class="status">Connected and ready</div>
-  </div>
-  
-  <script>
-    var brightnessSlider = document.getElementById('brightness');
-    var brightnessValue = document.getElementById('brightnessValue');
-    
-    brightnessSlider.addEventListener('input', function() {
-      brightnessValue.textContent = this.value;
-      setBrightness(this.value);
-    });
-    
-    function setBrightness(value) {
-      fetch('/brightness?brightness=' + value, { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
-    }
-    
-    function shutdownLights() {
-      fetch('/shutdown', { method: 'POST' })
-        .then(function() {
-          brightnessSlider.value = 0;
-          brightnessValue.textContent = '0';
-        })
-        .catch(function(err) { console.error('Error:', err); });
-    }
-    
-    function triggerRainbow() {
-      fetch('/rainbow', { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
-    }
-  </script>
-</body>
-</html>
-)rawHTML";
-
-// Setup WiFi Access Point
-void setupWiFi() {  
-  Serial.print("Connecting to WiFi Access Point: ");
-  Serial.println(ap_ssid);
-  
-  WiFi.begin(ap_ssid, ap_password);
-    
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(200);
-    Serial.print(".");
-  }
-
-  Serial.println();
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.printf("Connect to: %s\n", ap_ssid);
-  Serial.printf("Password: %s\n", ap_password);
-}
 
 
 void setupSerial(){
@@ -312,20 +46,13 @@ void setupSerial(){
   while (!Serial) {
     ; // Wait for serial port to connect. Needed for native USB
   }
-}
+  Serial.println("BlinkenLichten Initialized");
 
-// Setup mDNS service discovery
-void setupMDNS() {
-  // Initialize mDNS
-  if (!MDNS.begin("osc-to-midi")) {
-    Serial.println("Error starting mDNS");
-    return;
-  }
-  Serial.println("mDNS responder started");
-  
-  // Add OSC UDP service to mDNS-SD
-  MDNS.addService("http", "tcp", 80);
-  Serial.println("mDNS service registered: osc-to-midi._osc._udp.local on port 8888");
+  Serial.println("Available commands:");
+  Serial.println("  brightness <0-100>  - Set brightness level");
+  Serial.println("  rainbow <duration_ms> - Start rainbow effect for specified duration");
+  Serial.println("  shutdown 0          - Turn off the lights");
+  Serial.println("  on       0           - Turn lights back on to previous brightness"); 
 }
 
 // Save brightness to EEPROM
@@ -333,7 +60,6 @@ void saveToEeprom(int brightness) {
   brightness = constrain(brightness, 0, 100);
   EEPROM.write(BRIGHTNESS_ADDR, brightness);
   EEPROM.commit();
-  Serial.printf("Brightness saved to EEPROM: %d\n", brightness);
 }
 
 // Load brightness from EEPROM
@@ -351,69 +77,76 @@ void setupFastLED() {
   FastLED.setBrightness(128); // Set initial brightness (0-255)
 }
 
-// HTTP POST handler for warm white brightness control
-void handleSetBrightness() {
-  if (server.hasArg("brightness")) {
-    int brightness = server.arg("brightness").toInt();
-    if (brightness > 0) {
-      previousBrightness = brightness; // Store as previous brightness
+// Parse command and value
+void processCommand(String commandBuffer) {
+  commandBuffer.trim();
+  
+  // Parse command and value
+  int spaceIndex = commandBuffer.indexOf(' ');
+  if (spaceIndex > 0) {
+    String command = commandBuffer.substring(0, spaceIndex);
+    String valueStr = commandBuffer.substring(spaceIndex + 1);
+    valueStr.trim(); // Remove leading/trailing spaces
+    int value = valueStr.toInt();
+    // Process commands
+    if (command == "brightness") {
+      setWarmWhite(value);
+      saveToEeprom(value); // Save brightness to EEPROM
+      Serial.printf("Brightness set to: %d\n", value);
+    } else if (command == "rainbow") {
+      int duration = value == 0 ? 5000 : value ;
+      rainbowSnakeEffect(duration);
+      Serial.printf("Rainbow effect for %d ms\n", duration);
+      setWarmWhite(loadFromEeprom());
+    } else if (command == "flashred") {
+      int duration = value == 0 ? 5000 : value ;
+      flashRedEffect(duration);
+      Serial.printf("Flash red effect for %d ms\n", duration);
+      setWarmWhite(loadFromEeprom());
+    } else if (command == "shutdown") {
+      showAll(CRGB::Black);
+    } else if (command == "on") {
+      value = value == 0 ? loadFromEeprom() : value ;
+      setWarmWhite(value);
+      Serial.printf("Turning on to brightness: %d\n", value);
+    } else {
+      Serial.printf("Unknown command: %s\n", command.c_str());
     }
-    pendingBrightness = brightness;
-    server.send(200, "application/json", "{\"status\":\"ok\",\"brightness\":" + String(brightness) + "}");
-    Serial.printf("Brightness request received: %d\n", brightness);
-  } else {
-    server.send(400, "application/json", "{\"error\":\"Missing brightness parameter\"}");
   }
 }
 
-// HTTP POST handler for shutdown (all lights off)
-void handleShutdown() {
-  shutdownRequested = true;
-  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Shutdown requested\"}");
-  Serial.println("Shutdown request received");
-}
-
-// HTTP POST handler for rainbow effect
-void handleRainbow() {
-  rainbowDuration = 5000; // Default 5000ms
-  if (server.hasArg("duration")) {
-    rainbowDuration = server.arg("duration").toInt();
+// Handle serial commands
+void handleSerialCommand() {
+  static String commandBuffer = "";
+  
+  // Read all available characters
+  while (Serial.available()) {
+    char c = Serial.read();
+    
+    if (c == '\n' || c == '\r') {
+      // Process command when newline is received
+      if (commandBuffer.length() > 0) {
+        processCommand(commandBuffer);
+        commandBuffer = "";
+      }
+    }
+    else {
+      // Add character to buffer
+      commandBuffer += c;
+    }
   }
-  rainbowRequested = true;
-  rainbowStartTime = millis();
-  server.send(200, "application/json", "{\"status\":\"ok\",\"duration\":" + String(rainbowDuration) + "}");
-  Serial.printf("Rainbow effect request received for %d ms\n", rainbowDuration);
-}
-
-// HTTP GET handler for serving the web interface
-void handleRoot() {
-  server.send(200, "text/html", htmlPage);
-  Serial.println("Web interface requested");
-}
-
-// Setup web server routes
-void setupWebServer() {
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/brightness", HTTP_POST, handleSetBrightness);
-  server.on("/shutdown", HTTP_POST, handleShutdown);
-  server.on("/rainbow", HTTP_POST, handleRainbow);
-  server.begin();
-  Serial.println("Web server started");
 }
 
 void setup() {
   setupSerial();
   EEPROM.begin(EEPROM_SIZE);
-  setupWiFi();
-  setupMDNS();
   setupFastLED();
-  setupWebServer();
-  
+
   // Load and restore previous brightness level
-  currentBrightness = loadFromEeprom();
-  previousBrightness = currentBrightness;
+  int currentBrightness = loadFromEeprom();
   setWarmWhite(currentBrightness);
 }
+
 
 void showAll(CRGB color) {
   fill_solid(leds, NUM_LEDS, color);
@@ -425,7 +158,6 @@ void showAll(CRGB color) {
   delay(10);
 }
 
-
 // 5 second rainbow snake effect when triggered
 void rainbowSnakeEffect(int duration_ms) {
   unsigned long startTime = millis();
@@ -435,6 +167,18 @@ void rainbowSnakeEffect(int duration_ms) {
     }
     FastLED.show();
     delay(200);
+  }
+  showAll(CRGB::Black);
+}
+
+
+void flashRedEffect(int duration_ms) {
+  unsigned long startTime = millis();
+  while (millis() - startTime < duration_ms) {
+    showAll(CRGB::Red);
+    delay(100);
+    showAll(CRGB::Black);
+    delay(100);
   }
   showAll(CRGB::Black);
 }
@@ -453,48 +197,7 @@ void setWarmWhite(int brightness) {
 }
 
 void loop() {
-  server.handleClient();
-  
-  // Handle pending shutdown request
-  if (shutdownRequested) {
-    showAll(CRGB::Black);
-    currentBrightness = 0;
-    saveToEeprom(currentBrightness); // Save previous brightness for next power on
-    shutdownRequested = false;
-  }
-  
-  // Handle pending brightness request
-  if (pendingBrightness > 0) {
-    currentBrightness = pendingBrightness;
-    setWarmWhite(pendingBrightness);
-    saveToEeprom(pendingBrightness); // Save brightness to EEPROM
-    currentBrightness = pendingBrightness;
-    pendingBrightness = -1;
-  }
-  
-  // Handle pending rainbow request
-  if (rainbowRequested) {
-    unsigned long elapsedTime = millis() - rainbowStartTime;
-    if (elapsedTime < rainbowDuration) {
-      // Continue rainbow animation
-      for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CHSV((i * 256 / NUM_LEDS + (millis() / 10)) % 256, 255, 255);
-      }
-      FastLED.show();
-      delay(50);
-    } else {
-      // Rainbow finished - restore previous brightness level
-      rainbowRequested = false;
-      if(currentBrightness == 0) {
-        showAll(CRGB::Black);
-      } else {
-        setWarmWhite(currentBrightness);
-        setWarmWhite(currentBrightness);
-      }
-      
-    }
-  }
-  
-  delay(10); // Small delay to prevent blocking
+  handleSerialCommand(); // Read and process serial commands
+  delay(1); // Small delay to prevent blocking
 }
 
