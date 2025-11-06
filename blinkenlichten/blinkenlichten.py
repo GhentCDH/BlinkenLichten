@@ -354,7 +354,7 @@ if __name__ == '__main__':
     print("  POST /webhook - GitHub webhook (validates signature, checks conventional commits)")
     print("  GET  /webhook?payload=<json> - Test webhook with provided JSON payload (no signature validation)")
 
-    with serial.Serial(SERIAL_DEVICE, SERIAL_BAUDRATE, timeout=1) as ser:
+    with serial.Serial(SERIAL_DEVICE, SERIAL_BAUDRATE, timeout=None) as ser:
         SerialHandler.serial_connection = ser
         server = HTTPServer(('0.0.0.0', PORT), SerialHandler)
         try:
