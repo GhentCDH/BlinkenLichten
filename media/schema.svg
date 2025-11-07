@@ -1,0 +1,170 @@
+<svg viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <!-- Arrow marker -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#4A5568"/>
+    </marker>
+    
+    <!-- Gradient for GitHub -->
+    <linearGradient id="githubGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#24292e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1e22;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Gradient for proxy -->
+    <linearGradient id="proxyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563EB;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Gradient for local server -->
+    <linearGradient id="pythonGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3776AB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2d5f8d;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Gradient for ESP32 -->
+    <linearGradient id="espGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E63946;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Rainbow gradient for LED strip -->
+    <linearGradient id="rainbow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF0000" />
+      <stop offset="16.66%" style="stop-color:#FF8C00" />
+      <stop offset="33.33%" style="stop-color:#FFD700" />
+      <stop offset="50%" style="stop-color:#00FF00" />
+      <stop offset="66.66%" style="stop-color:#00CED1" />
+      <stop offset="83.33%" style="stop-color:#0000FF" />
+      <stop offset="100%" style="stop-color:#8B008B" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="600" fill="#F7FAFC"/>
+  
+  <!-- Title -->
+  <text x="600" y="40" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#2D3748">
+    BlinkenLichten Architecture
+  </text>
+  
+  <!-- GitHub -->
+  <g transform="translate(50, 100)">
+    <rect width="160" height="80" rx="8" fill="url(#githubGradient)"/>
+    <text x="80" y="35" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      GitHub
+    </text>
+    <text x="80" y="55" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      Push Event
+    </text>
+  </g>
+  
+  <!-- Arrow from GitHub to Proxy -->
+  <line x1="210" y1="140" x2="290" y2="140" stroke="#4A5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="250" y="125" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">
+    Webhook
+  </text>
+  <text x="250" y="110" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#A0AEC0">
+    POST /webhook
+  </text>
+  
+  <!-- Remote Proxy Server -->
+  <g transform="translate(300, 100)">
+    <rect width="160" height="80" rx="8" fill="url(#proxyGradient)"/>
+    <text x="80" y="35" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      Remote Server
+    </text>
+    <text x="80" y="55" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      :55155
+    </text>
+  </g>
+  
+  <!-- SSH Tunnel visualization -->
+  <g transform="translate(260, 200)">
+    <rect x="0" y="0" width="240" height="70" rx="8" fill="none" stroke="#10B981" stroke-width="2" stroke-dasharray="5,5"/>
+    <rect x="0" y="0" width="240" height="70" rx="8" fill="#10B981" opacity="0.05"/>
+  </g>
+  
+  <!-- Arrow through tunnel -->
+  <path d="M 380 180 L 380 220 L 380 280" stroke="#10B981" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+  
+  <!-- Tunnel label positioned to the side -->
+  <text x="520" y="230" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#059669">
+    AutoSSH Tunnel
+  </text>
+  <text x="520" y="245" font-family="Arial, sans-serif" font-size="10" fill="#059669">
+    Reverse Proxy
+  </text>
+  
+  <!-- Local Python Server -->
+  <g transform="translate(300, 290)">
+    <rect width="160" height="80" rx="8" fill="url(#pythonGradient)"/>
+    <text x="80" y="30" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      Python Server
+    </text>
+    <text x="80" y="50" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="white">
+      localhost:55155
+    </text>
+    <text x="80" y="65" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#E0E0E0">
+      blinkenlichten.py
+    </text>
+  </g>
+  
+  <!-- Arrow from Python to ESP32 -->
+  <line x1="460" y1="330" x2="540" y2="330" stroke="#4A5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="500" y="315" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">
+    Serial
+  </text>
+  <text x="500" y="300" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#A0AEC0">
+    115200 baud
+  </text>
+  
+  <!-- ESP32 -->
+  <g transform="translate(550, 290)">
+    <rect width="160" height="80" rx="8" fill="url(#espGradient)"/>
+    <text x="80" y="35" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      ESP32
+    </text>
+    <text x="80" y="55" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      FastLED
+    </text>
+  </g>
+  
+  <!-- Arrow from ESP32 to LED Strip -->
+  <line x1="710" y1="330" x2="790" y2="330" stroke="#4A5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="750" y="315" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">
+    GPIO
+  </text>
+  
+  <!-- LED Strip -->
+  <g transform="translate(800, 290)">
+    <rect width="340" height="80" rx="40" fill="url(#rainbow)" opacity="0.9"/>
+    <rect width="340" height="80" rx="40" fill="none" stroke="#2D3748" stroke-width="2"/>
+    <text x="170" y="45" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white" stroke="#2D3748" stroke-width="0.5">
+      LED Strip
+    </text>
+    <!-- LED dots animation -->
+    <circle cx="30" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="60" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" begin="0.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="90" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" begin="0.4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="250" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" begin="0.6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="280" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" begin="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="310" cy="40" r="5" fill="white" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" begin="1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+
+</svg>
