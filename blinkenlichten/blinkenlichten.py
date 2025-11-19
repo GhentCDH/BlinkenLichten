@@ -308,6 +308,12 @@ class SerialHandler(BaseHTTPRequestHandler):
         elif path == '/flashred':
             duration = params.get('duration', ['5000'])[0]
             command = f'flashred {duration}'
+        elif path == '/comet':
+            duration = params.get('duration', ['5000'])[0]
+            command = f'comet {duration}'
+        elif path == '/twinkle':
+            duration = params.get('duration', ['5000'])[0]
+            command = f'twinkle {duration}'
         elif path == '/shutdown' or path == '/off':
             command = 'shutdown 0'
         elif path == '/on':
@@ -347,6 +353,8 @@ if __name__ == '__main__':
     print("  GET  /rainbow?duration=<ms> - Trigger rainbow effect (default 5000ms)")
     print("  POST /rainbow?duration=<ms> - Trigger rainbow effect (default 5000ms)")
     print("  POST /flashred?duration=<ms> - Trigger flash red effect (default 5000ms)")
+    print("  POST /comet?duration=<ms> - Trigger comet effect (default 5000ms)")
+    print("  POST /twinkle?duration=<ms> - Trigger twinkle effect (default 5000ms)")
     print("  POST /on - Turn lights on")
     print("  POST /off - Turn lights off")
     print("  POST /shutdown - Turn lights off")

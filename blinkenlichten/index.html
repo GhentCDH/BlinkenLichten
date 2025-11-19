@@ -106,7 +106,7 @@
     
     .button-group {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 12px;
       margin-bottom: 15px;
     }
@@ -164,13 +164,11 @@
       <div class="value-display"><span id="brightnessValue">50</span>%</div>
     </div>
     
-    <div class="button-group" style="display: none;">
-      
-    </div>
-    
-    <div class="button-group" style="display: none;">
+    <div class="button-group">
       <button class="btn-shutdown" onclick="triggerFlashRed()">Flash Red</button>
       <button class="btn-shutdown" onclick="triggerRainbow()">Rainbow Effect</button>
+      <button class="btn-shutdown" onclick="triggerComet()">Comet</button>
+      <button class="btn-shutdown" onclick="triggerTwinkle()">Twinkle</button>
     </div>
     
     <div>
@@ -209,6 +207,16 @@
     
     function triggerFlashRed() {
       fetch('/flashred', { method: 'POST' })
+        .catch(function(err) { console.error('Error:', err); });
+    }
+
+    function triggerComet() {
+      fetch('/comet', { method: 'POST' })
+        .catch(function(err) { console.error('Error:', err); });
+    }
+
+    function triggerTwinkle() {
+      fetch('/twinkle', { method: 'POST' })
         .catch(function(err) { console.error('Error:', err); });
     }
   </script>

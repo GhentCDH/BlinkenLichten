@@ -14,6 +14,8 @@ void saveToEeprom(int brightness);
 int loadFromEeprom();
 void rainbowSnakeEffect(int duration_ms);
 void flashRedEffect(int duration_ms);
+void cometEffect(int duration_ms);
+void twinkleEffect(int duration_ms);
 // ========================================================
 
 // ================= USER CONFIG =================
@@ -51,6 +53,9 @@ void setupSerial(){
   Serial.println("Available commands:");
   Serial.println("  brightness <0-100>  - Set brightness level");
   Serial.println("  rainbow <duration_ms> - Start rainbow effect for specified duration");
+  Serial.println("  flashred <duration_ms> - Flash red effect for specified duration");
+  Serial.println("  comet <duration_ms> - Bouncing comet effect for specified duration");
+  Serial.println("  twinkle <duration_ms> - Twinkle/sparkle effect for specified duration");
   Serial.println("  shutdown 0          - Turn off the lights");
   Serial.println("  on       0           - Turn lights back on to previous brightness"); 
 }
@@ -102,6 +107,16 @@ void processCommand(String commandBuffer) {
       int duration = value == 0 ? 5000 : value ;
       flashRedEffect(duration);
       Serial.printf("Flash red effect for %d ms\n", duration);
+      setWarmWhite(loadFromEeprom());
+    } else if (command == "comet") {
+      int duration = value == 0 ? 5000 : value ;
+      cometEffect(duration);
+      Serial.printf("Comet effect for %d ms\n", duration);
+      setWarmWhite(loadFromEeprom());
+    } else if (command == "twinkle") {
+      int duration = value == 0 ? 5000 : value ;
+      twinkleEffect(duration);
+      Serial.printf("Twinkle effect for %d ms\n", duration);
       setWarmWhite(loadFromEeprom());
     } else if (command == "shutdown") {
       showAll(CRGB::Black);
@@ -178,6 +193,75 @@ void flashRedEffect(int duration_ms) {
     showAll(CRGB::Red);
     delay(100);
     showAll(CRGB::Black);
+    delay(100);
+  }
+  showAll(CRGB::Black);
+}
+
+// Comet effect - bouncing color-shifting comet with sparkly trail
+void cometEffect(int duration_ms) {
+  static uint8_t hue = 0;
+  static int iDirection = 1;
+  static int iPos = 0;
+  const int cometSize = 5;
+  const uint8_t fadeAmt = 128;
+  const uint8_t deltaHue = 4;
+
+  unsigned long startTime = millis();
+  while (millis() - startTime < duration_ms) {
+    hue += deltaHue;
+    iPos += iDirection;
+
+    // Bounce at boundaries
+    if (iPos == (NUM_LEDS - 1) || iPos == 0) {
+      iDirection *= -1;
+    }
+
+    // Draw comet head
+    for (int i = 0; i < cometSize; i++) {
+      int idx = iPos - (i * iDirection);
+      if (idx >= 0 && idx < NUM_LEDS) {
+        leds[idx] = CHSV(hue, 255, 255);
+      }
+    }
+
+    // Randomly fade all LEDs for sparkly trail effect
+    for (int j = 0; j < NUM_LEDS; j++) {
+      if (random(10) > 5) {
+        leds[j].fadeToBlackBy(fadeAmt);
+      }
+    }
+
+    FastLED.show();
+    delay(50);
+  }
+  showAll(CRGB::Black);
+}
+
+// Twinkle effect - random sparkles with fading trails
+void twinkleEffect(int duration_ms) {
+  static const CRGB colors[] = {
+    CRGB::Red, CRGB::Blue, CRGB::Purple,
+    CRGB::Green, CRGB::Yellow, CRGB::Orange,
+    CRGB::Cyan, CRGB::Magenta
+  };
+  const int colorCount = 8;
+  const int density = 4; // 1/4 of LEDs light up per cycle
+
+  unsigned long startTime = millis();
+  while (millis() - startTime < duration_ms) {
+    // Fade all LEDs slightly for sparkle trail
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i].fadeToBlackBy(64);  // Gentle fade
+    }
+
+    // Add new sparkles
+    for (int i = 0; i < NUM_LEDS / density; i++) {
+      int pos = random(NUM_LEDS);
+      leds[pos] = colors[random(colorCount)];
+    }
+
+    FastLED.show();
     delay(100);
   }
   showAll(CRGB::Black);
