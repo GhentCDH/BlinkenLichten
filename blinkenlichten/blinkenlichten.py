@@ -266,40 +266,75 @@ class SerialHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b'Bad Request: Invalid JSON\n')
                 print(f"Webhook rejected: Invalid JSON - {e}")
                 return
-            
-            # Extract commits from push event
-            commits = payload.get('commits', [])
-            if not commits:
+
+            event_type = self.headers.get('X-GitHub-Event', '')
+
+            # flash green when a workflow for a versioned tag was successful
+            if event_type == "workflow_run":
+                workflow_run = payload.get('workflow_run', {})
+                conclusion = workflow_run.get('conclusion')
+                status = workflow_run.get('status')
+                head_branch = workflow_run.get('head_branch', '')
+                
+                print(f"Workflow run event: status={status}, conclusion={conclusion}, branch={head_branch}")
+                
+                # Check if workflow completed successfully and branch is a version tag
+                if status == 'completed' and conclusion == 'success' and self._is_version_tag(head_branch):
+                    command = 'flashgreen 5000'
+                    print(f"Webhook: Workflow succeeded on version tag '{head_branch}' -> Flash green effect")
+                    send_serial_command(command, self.serial_connection)
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'OK: Version tag workflow success - flashgreen\n')
+                    return
+                elif status == 'completed' and conclusion == 'success':
+                    print(f"Webhook: Workflow succeeded but not on version tag (branch: {head_branch})")
+                else:
+                    print("Webhook: Workflow not successful or not completed")
+                
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain')
                 self.end_headers()
-                self.wfile.write(b'OK: No commits to process\n')
-                print("Webhook: No commits in payload")
+                self.wfile.write(b'OK: Workflow event processed\n')
                 return
-            
-            # Check if all commits follow Conventional Commits
-            all_valid = check_conventional_commits(commits)
-            
-            # Trigger appropriate LED effect
-            if all_valid:
-                command = 'rainbow 5000'
-                print("Webhook: All commits valid -> Rainbow effect")
-            else:
-                command = 'flashred 5000'
-                print("Webhook: Invalid commits found -> Flash red effect")
-            
-            # Send command to LED strip
-            send_serial_command(command, self.serial_connection)
-            
-            # Respond immediately to GitHub
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            response_msg = f'OK: Processed {len(commits)} commits - {"rainbow" if all_valid else "flashred"}\n'
-            self.wfile.write(response_msg.encode())
-            return
+
+            # Extract commits from push event & check if they are conventional
+            if event_type == "push":
+                commits = payload.get('commits', [])
+                if not commits:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'OK: No commits to process\n')
+                    print("Webhook: No commits in payload")
+                    return
+                
+                # Check if all commits follow Conventional Commits
+                all_valid = check_conventional_commits(commits)
+                
+                # Trigger appropriate LED effect
+                if all_valid:
+                    command = 'rainbow 5000'
+                    print("Webhook: All commits valid -> Rainbow effect")
+                else:
+                    command = 'flashred 5000'
+                    print("Webhook: Invalid commits found -> Flash red effect")
+                
+                # Send command to LED strip
+                send_serial_command(command, self.serial_connection)
+                
+                # Respond immediately to GitHub
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                response_msg = f'OK: Processed {len(commits)} commits - {"rainbow" if all_valid else "flashred"}\n'
+                self.wfile.write(response_msg.encode())
+                return
         
         command = None
+
         print(path)
         # Handle different endpoints
         if path == '/rainbow':
@@ -308,6 +343,9 @@ class SerialHandler(BaseHTTPRequestHandler):
         elif path == '/flashred':
             duration = params.get('duration', ['5000'])[0]
             command = f'flashred {duration}'
+        elif path == '/flashgreen':
+            duration = params.get('duration', ['5000'])[0]
+            command = f'flashgreen {duration}'
         elif path == '/comet':
             duration = params.get('duration', ['5000'])[0]
             command = f'comet {duration}'
@@ -336,6 +374,13 @@ class SerialHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
             self.wfile.write(b'Unknown endpoint\n')
+
+    def _is_version_tag(self, ref):
+        """Check if the ref is a version tag (e.g., v1.0.0, v2.1.3, 1.0.0)"""
+        import re
+        # Match tags like v1.0.0, v2.1.3-beta, 1.0.0, etc.
+        version_pattern = r'^v?\d+\.\d+\.\d+.*$'
+        return bool(re.match(version_pattern, ref))
     
     def log_message(self, format, *args):
         print(f"{self.address_string()} - {format % args}")
@@ -362,8 +407,8 @@ if __name__ == '__main__':
     print("  POST /webhook - GitHub webhook (validates signature, checks conventional commits)")
     print("  GET  /webhook?payload=<json> - Test webhook with provided JSON payload (no signature validation)")
 
-    with serial.Serial(SERIAL_DEVICE, SERIAL_BAUDRATE, timeout=None) as ser:
-        SerialHandler.serial_connection = ser
+    with serial.Serial(SERIAL_DEVICE, SERIAL_BAUDRATE, timeout=None) as ser: # pyright: ignore
+        SerialHandler.serial_connection = ser # pyright: ignore
         server = HTTPServer(('0.0.0.0', PORT), SerialHandler)
         try:
             server.serve_forever()
