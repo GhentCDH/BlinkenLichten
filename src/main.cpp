@@ -2,6 +2,9 @@
 #include "CRGBW-final.h"
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 // ================= FORWARD DECLARATIONS =================
 void setupSerial();
@@ -17,6 +20,11 @@ void flashRedEffect(int duration_ms);
 void flashGreenEffect(int duration_ms);
 void cometEffect(int duration_ms);
 void twinkleEffect(int duration_ms);
+void takeLedMutex();
+void giveLedMutex();
+void stopEffectTask();
+void startEffectTask(uint8_t effectType, int duration);
+void effectTaskFunction(void* parameter);
 // ========================================================
 
 // ================= USER CONFIG =================
@@ -42,6 +50,24 @@ static RGBWEmulatedController<ControllerT, GRB> rgbwEmu(rgbw);
 // EEPROM configuration
 #define EEPROM_SIZE 32
 #define BRIGHTNESS_ADDR 0
+
+// Effect type constants
+#define EFFECT_RAINBOW 0
+#define EFFECT_FLASHRED 1
+#define EFFECT_FLASHGREEN 2
+#define EFFECT_COMET 3
+#define EFFECT_TWINKLE 4
+
+// FreeRTOS task management
+SemaphoreHandle_t ledMutex = NULL;
+TaskHandle_t effectTaskHandle = NULL;
+volatile bool stopCurrentEffect = false;
+
+// Effect parameters struct
+struct EffectParams {
+  uint8_t effectType;
+  int duration_ms;
+};
 
 
 void setupSerial(){
@@ -85,6 +111,97 @@ void setupFastLED() {
   FastLED.setBrightness(128); // Set initial brightness (0-255)
 }
 
+// Mutex wrapper functions for LED access
+void takeLedMutex() {
+  if (ledMutex != NULL) {
+    xSemaphoreTake(ledMutex, portMAX_DELAY);
+  }
+}
+
+void giveLedMutex() {
+  if (ledMutex != NULL) {
+    xSemaphoreGive(ledMutex);
+  }
+}
+
+// Stop the currently running effect task
+void stopEffectTask() {
+  if (effectTaskHandle != NULL) {
+    stopCurrentEffect = true;
+    // Wait for the task to finish and delete itself
+    while (effectTaskHandle != NULL) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    stopCurrentEffect = false;
+  }
+}
+
+// Main effect task function - runs in separate FreeRTOS task
+void effectTaskFunction(void* parameter) {
+  EffectParams* params = (EffectParams*)parameter;
+  uint8_t effectType = params->effectType;
+  int duration = params->duration_ms;
+  delete params;  // Free the allocated parameter
+
+  Serial.printf("Effect %d started for %d ms\n", effectType, duration);
+
+  // Run the appropriate effect
+  switch (effectType) {
+    case EFFECT_RAINBOW:
+      rainbowSnakeEffect(duration);
+      break;
+    case EFFECT_FLASHRED:
+      flashRedEffect(duration);
+      break;
+    case EFFECT_FLASHGREEN:
+      flashGreenEffect(duration);
+      break;
+    case EFFECT_COMET:
+      cometEffect(duration);
+      break;
+    case EFFECT_TWINKLE:
+      twinkleEffect(duration);
+      break;
+  }
+
+  // Effect finished - clear LEDs and restore brightness
+  if (!stopCurrentEffect) {
+    takeLedMutex();
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
+    giveLedMutex();
+
+    setWarmWhite(loadFromEeprom());
+    Serial.println("Effect completed, brightness restored");
+  }
+
+  // Clean up
+  effectTaskHandle = NULL;
+  vTaskDelete(NULL);
+}
+
+// Start a new effect task
+void startEffectTask(uint8_t effectType, int duration) {
+  // Stop any running effect first
+  stopEffectTask();
+
+  // Create parameters for the task
+  EffectParams* params = new EffectParams;
+  params->effectType = effectType;
+  params->duration_ms = duration;
+
+  // Create the effect task on Core 0, priority 1 (lower than main loop)
+  xTaskCreatePinnedToCore(
+    effectTaskFunction,    // Task function
+    "EffectTask",          // Task name
+    4096,                  // Stack size (bytes)
+    params,                // Parameters
+    1,                     // Priority
+    &effectTaskHandle,     // Task handle
+    0                      // Core 0
+  );
+}
+
 // Parse command and value
 void processCommand(String commandBuffer) {
   commandBuffer.trim();
@@ -112,38 +229,33 @@ void processCommand(String commandBuffer) {
     int value = valueStr.toInt();
     // Process commands
     if (command == "brightness") {
+      stopEffectTask();  // Stop any running effect first
       setWarmWhite(value);
       saveToEeprom(value); // Save brightness to EEPROM
       Serial.printf("Brightness set to: %d\n", value);
     } else if (command == "rainbow") {
-      int duration = value == 0 ? 5000 : value ;
-      rainbowSnakeEffect(duration);
-      Serial.printf("Rainbow effect for %d ms\n", duration);
-      setWarmWhite(loadFromEeprom());
+      int duration = value == 0 ? 5000 : value;
+      startEffectTask(EFFECT_RAINBOW, duration);
     } else if (command == "flashred") {
-      int duration = value == 0 ? 5000 : value ;
-      flashRedEffect(duration);
-      Serial.printf("Flash red effect for %d ms\n", duration);
-      setWarmWhite(loadFromEeprom());
+      int duration = value == 0 ? 5000 : value;
+      startEffectTask(EFFECT_FLASHRED, duration);
     } else if (command == "flashgreen") {
-      int duration = value == 0 ? 5000 : value ;
-      flashGreenEffect(duration);
-      Serial.printf("Flash green effect for %d ms\n", duration);
-      setWarmWhite(loadFromEeprom());
+      int duration = value == 0 ? 5000 : value;
+      startEffectTask(EFFECT_FLASHGREEN, duration);
     } else if (command == "comet") {
-      int duration = value == 0 ? 5000 : value ;
-      cometEffect(duration);
-      Serial.printf("Comet effect for %d ms\n", duration);
-      setWarmWhite(loadFromEeprom());
+      int duration = value == 0 ? 5000 : value;
+      startEffectTask(EFFECT_COMET, duration);
     } else if (command == "twinkle") {
-      int duration = value == 0 ? 5000 : value ;
-      twinkleEffect(duration);
-      Serial.printf("Twinkle effect for %d ms\n", duration);
-      setWarmWhite(loadFromEeprom());
+      int duration = value == 0 ? 5000 : value;
+      startEffectTask(EFFECT_TWINKLE, duration);
     } else if (command == "shutdown") {
+      stopEffectTask();  // Stop any running effect first
+      takeLedMutex();
       showAll(CRGB::Black);
+      giveLedMutex();
     } else if (command == "on") {
-      value = value == 0 ? loadFromEeprom() : value ;
+      stopEffectTask();  // Stop any running effect first
+      value = value == 0 ? loadFromEeprom() : value;
       setWarmWhite(value);
       Serial.printf("Turning on to brightness: %d\n", value);
     } else {
@@ -179,6 +291,14 @@ void setup() {
   EEPROM.begin(EEPROM_SIZE);
   setupFastLED();
 
+  // Initialize FreeRTOS mutex for LED access
+  ledMutex = xSemaphoreCreateMutex();
+  if (ledMutex == NULL) {
+    Serial.println("ERROR: Failed to create LED mutex!");
+  } else {
+    Serial.println("LED mutex initialized");
+  }
+
   // Load and restore previous brightness level
   int currentBrightness = loadFromEeprom();
   setWarmWhite(currentBrightness);
@@ -195,40 +315,53 @@ void showAll(CRGB color) {
   delay(10);
 }
 
-// 5 second rainbow snake effect when triggered
+// Rainbow snake effect - interruptible
 void rainbowSnakeEffect(int duration_ms) {
   unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms) {
+  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
+    takeLedMutex();
     for (int i = 0; i < NUM_LEDS; i++) {
       leds[i] = CHSV((i * 256 / NUM_LEDS + (millis() / 10)) % 256, 255, 255);
     }
     FastLED.show();
-    delay(200);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
-  showAll(CRGB::Black);
 }
 
 
 void flashRedEffect(int duration_ms) {
   unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms) {
+  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
+    takeLedMutex();
     showAll(CRGB::Red);
-    delay(100);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    if (stopCurrentEffect) break;
+
+    takeLedMutex();
     showAll(CRGB::Black);
-    delay(100);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
-  showAll(CRGB::Black);
 }
 
 void flashGreenEffect(int duration_ms) {
   unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms) {
+  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
+    takeLedMutex();
     showAll(CRGB::Green);
-    delay(100);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    if (stopCurrentEffect) break;
+
+    takeLedMutex();
     showAll(CRGB::Black);
-    delay(100);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
-  showAll(CRGB::Black);
 }
 
 // Comet effect - bouncing color-shifting comet with sparkly trail
@@ -241,7 +374,9 @@ void cometEffect(int duration_ms) {
   const uint8_t deltaHue = 4;
 
   unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms) {
+  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
+    takeLedMutex();
+
     hue += deltaHue;
     iPos += iDirection;
 
@@ -266,9 +401,9 @@ void cometEffect(int duration_ms) {
     }
 
     FastLED.show();
-    delay(50);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
-  showAll(CRGB::Black);
 }
 
 // Twinkle effect - random sparkles with fading trails
@@ -282,7 +417,9 @@ void twinkleEffect(int duration_ms) {
   const int density = 4; // 1/4 of LEDs light up per cycle
 
   unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms) {
+  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
+    takeLedMutex();
+
     // Fade all LEDs slightly for sparkle trail
     for (int i = 0; i < NUM_LEDS; i++) {
       leds[i].fadeToBlackBy(64);  // Gentle fade
@@ -295,26 +432,28 @@ void twinkleEffect(int duration_ms) {
     }
 
     FastLED.show();
-    delay(100);
+    giveLedMutex();
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
-  showAll(CRGB::Black);
 }
 
 // set warm white color for the rbgw leds
 void setWarmWhite(int brightness) {
+  takeLedMutex();
   int clampBrightness = constrain(brightness, 0, 100);
   int whiteValue = map(clampBrightness, 0, 100, 0, 255);
-  //else 
+  //else
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CRGB::White;
     //set brightness or the led
     leds[i].fadeToBlackBy(255 - whiteValue);
   }
   FastLED.show();
+  giveLedMutex();
 }
 
 void loop() {
   handleSerialCommand(); // Read and process serial commands
-  delay(1); // Small delay to prevent blocking
+  vTaskDelay(pdMS_TO_TICKS(1)); // Small delay to prevent blocking
 }
 

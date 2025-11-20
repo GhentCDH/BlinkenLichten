@@ -2,20 +2,22 @@
 
 > ESP32-controlled LED strip with a Python HTTP bridge, webhook-driven effects, and a minimalist web UI.
 
-BlinkenLichten lets you control an addressable LED strip attached to an ESP32 using simple serial commands. A Python webserver exposes HTTP endpoints (and a basic HTML page) and reacts to GitHub push webhooks: if every commit message follows the Conventional Commits specification you get a celebratory rainbow; if any commit breaks the rules the strip flashes red.
+BlinkenLichten lets you control an addressable LED strip attached to an ESP32 using simple serial commands. 
+
+A Python webserver exposes HTTP endpoints (and a basic HTML page) and reacts to GitHub push webhooks with some processing behind it:
+
+* For a push message it checks the commit messages. If tit follows the Conventional Commits specification you get a celebratory rainbow; if any commit breaks the rules the strip flashes red.
+* For succesfully finished workflows, the led strip reacts with green flashes.
 
 
 ## 1. Overview & architecture
 
 - ESP32 runs the sketch in `src/main.cpp` (FastLED + EEPROM persistence).
 - Host machine runs `blinkenlichten/blinkenlichten.py` bridging HTTP → Serial.
-- Browser UI served at `/` allows manual triggering.
-- GitHub sends push events → server validates signature & commit messages → selects effect.
+- GitHub sends webhook events & selects effect.
 
 
 ![Architecture diagram](./media/schema.svg)
-
-If pyserial is missing the server degrades to a dry‑run mode (logs commands, no hardware calls).
 
 ---
 
@@ -24,21 +26,10 @@ If pyserial is missing the server degrades to a dry‑run mode (logs commands, n
 Location: `src/main.cpp`. Key features:
 - FastLED with RGBW emulation.
 - EEPROM storage of last brightness (0–100) at address 0.
-- Effects: Rainbow snake, Flash Red, Warm White, Shutdown.
+- Effects: Rainbow snake, Flash Red, Warm White, Flash Green, Comet, Shutdown.
 - Serial baud: 115200.
 
-Build & upload (USB connected):
-```zsh
-pio run -t upload
-```
-Or use the PlatformIO VS Code UI ("Upload").
-
-Monitor serial output:
-```zsh
-pio device monitor -b 115200
-```
-
----
+Build & upload using platfromio
 
 ## 3. Serial command protocol
 
@@ -49,8 +40,9 @@ Commands are ASCII lines ending with `\n`:
 | `brightness <0-100>` | 0–100 | Set warm white brightness & persist to EEPROM |
 | `rainbow <ms>` | duration (0 → 5000 default) | Run rainbow snake then restore brightness |
 | `flashred <ms>` | duration (0 → 5000 default) | Flash red pattern then restore brightness |
-| `shutdown 0` / `off` | 0 | Turn all LEDs off |
-| `on 0` / `on <0-100>` | brightness | Turn on & restore / set brightness |
+| `shutdown 0  | 0 | Turn all LEDs off |
+| `on  <0-100>` | brightness | Turn on & restore / set brightness |
+| `getbrightness` |  | returns the current brightness level |
 
 The Python bridge sends exactly these strings followed by `\n`.
 
@@ -63,8 +55,6 @@ File: `blinkenlichten/blinkenlichten.py`
 Start (defaults: port 55155, device `/dev/cu.usbserial-0001`):
 ```zsh
 uv run blinkenlichten.py
-# or
-python blinkenlichten/blinkenlichten.py
 ```
 Custom port/device:
 ```zsh
@@ -93,11 +83,6 @@ uv run blinkenlichten.py 55155 /dev/cu.usbserial-0001
     - All commits valid → `rainbow 5000`
     - Any invalid → `flashred 5000`
 
-Set secret (zsh/macOS):
-```zsh
-export WEBHOOK_SECRET="your-shared-secret"
-uv run blinkenlichten.py
-```
 
 ---
 
@@ -140,8 +125,10 @@ Persistent tunnel with autossh:
 autossh -M 0 -N -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -R 0.0.0.0:55155:localhost:55155 user@remote.example.org
 ```
 
-
 ## License
-Add license information here (e.g., MIT) if desired.
+MIT license
 
+## Credits
+
+Developed for GhentCDH.
 
