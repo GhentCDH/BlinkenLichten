@@ -198,6 +198,17 @@ void flashRedEffect(int duration_ms) {
   showAll(CRGB::Black);
 }
 
+void flashGreenEffect(int duration_ms) {
+  unsigned long startTime = millis();
+  while (millis() - startTime < duration_ms) {
+    showAll(CRGB::Green);
+    delay(100);
+    showAll(CRGB::Black);
+    delay(100);
+  }
+  showAll(CRGB::Black);
+}
+
 // Comet effect - bouncing color-shifting comet with sparkly trail
 void cometEffect(int duration_ms) {
   static uint8_t hue = 0;
