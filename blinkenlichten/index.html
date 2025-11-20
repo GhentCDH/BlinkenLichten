@@ -181,12 +181,35 @@
   <script>
     var brightnessSlider = document.getElementById('brightness');
     var brightnessValue = document.getElementById('brightnessValue');
-    
+
+    // Fetch current brightness on page load
+    function loadCurrentBrightness() {
+      fetch('/brightness', { method: 'GET' })
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
+          if (data.brightness !== undefined) {
+            var brightness = data.brightness;
+            brightnessSlider.value = brightness;
+            brightnessValue.textContent = brightness;
+            console.log('Loaded brightness:', brightness);
+          }
+        })
+        .catch(function(err) {
+          console.error('Error loading brightness:', err);
+          // Keep default value of 50 if fetch fails
+        });
+    }
+
+    // Load brightness when page loads
+    window.addEventListener('DOMContentLoaded', loadCurrentBrightness);
+
     brightnessSlider.addEventListener('input', function() {
       brightnessValue.textContent = this.value;
       setBrightness(this.value);
     });
-    
+
     function setBrightness(value) {
       fetch('/brightness?brightness=' + value, { method: 'POST' })
         .catch(function(err) { console.error('Error:', err); });

@@ -45,6 +45,52 @@ def send_serial_command(command,ser):
         return False, f'Error: {str(e)}'
 
 
+def send_serial_command_with_response(command, ser, timeout=1.0):
+    """Send a command to the serial device and wait for a response.
+
+    Args:
+        command: The command to send
+        ser: The serial connection
+        timeout: Maximum time to wait for response in seconds
+
+    Returns:
+        tuple: (success: bool, response: str)
+    """
+    try:
+        # Clear any pending data in the buffer
+        if hasattr(ser, 'reset_input_buffer'):
+            ser.reset_input_buffer()
+
+        # Send command
+        ser.write(f'{command}\n'.encode("ascii"))
+        ser.flush()
+        print(f"Command sent: {command}")
+
+        # Read response with timeout
+        import time
+        start_time = time.time()
+        response_lines = []
+
+        while time.time() - start_time < timeout:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('ascii').strip()
+                if line:
+                    response_lines.append(line)
+                    # For getbrightness, we expect a single number
+                    if command == 'getbrightness' and line.isdigit():
+                        return True, line
+            time.sleep(0.01)  # Small delay to avoid busy waiting
+
+        if response_lines:
+            return True, '\n'.join(response_lines)
+        else:
+            return False, 'No response received'
+
+    except Exception as e:
+        print(f"Error sending command: {command} - {str(e)}")
+        return False, f'Error: {str(e)}'
+
+
 class SerialHandler(BaseHTTPRequestHandler):
     serial_connection = None  # Class variable to hold serial connection
     
@@ -63,6 +109,25 @@ class SerialHandler(BaseHTTPRequestHandler):
             with open('index.html', 'r') as f:
                 html_page = f.read()
             self.wfile.write(html_page.encode())
+        elif path == '/brightness':
+            # GET /brightness - retrieve current brightness from ESP32
+            print("Requesting current brightness...")
+            success, response = send_serial_command_with_response('getbrightness', self.serial_connection)
+
+            if success and response.isdigit():
+                brightness = int(response)
+                print(f"Current brightness: {brightness}")
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'brightness': brightness}).encode())
+            else:
+                print(f"Failed to get brightness: {response}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Failed to read brightness'}).encode())
         elif path == '/rainbow':
             # Support GET /rainbow?duration=<ms>
             duration = params.get('duration', ['5000'])[0]

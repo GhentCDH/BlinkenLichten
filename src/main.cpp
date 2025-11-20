@@ -14,6 +14,7 @@ void saveToEeprom(int brightness);
 int loadFromEeprom();
 void rainbowSnakeEffect(int duration_ms);
 void flashRedEffect(int duration_ms);
+void flashGreenEffect(int duration_ms);
 void cometEffect(int duration_ms);
 void twinkleEffect(int duration_ms);
 // ========================================================
@@ -52,6 +53,7 @@ void setupSerial(){
 
   Serial.println("Available commands:");
   Serial.println("  brightness <0-100>  - Set brightness level");
+  Serial.println("  getbrightness       - Get current brightness level");
   Serial.println("  rainbow <duration_ms> - Start rainbow effect for specified duration");
   Serial.println("  flashred <duration_ms> - Flash red effect for specified duration");
   Serial.println("  flashgreen <duration_ms> - Flash green effect for specified duration");
@@ -86,9 +88,23 @@ void setupFastLED() {
 // Parse command and value
 void processCommand(String commandBuffer) {
   commandBuffer.trim();
-  
+
   // Parse command and value
   int spaceIndex = commandBuffer.indexOf(' ');
+
+  // Handle single-word commands (no value)
+  if (spaceIndex == -1) {
+    String command = commandBuffer;
+    if (command == "getbrightness") {
+      int brightness = loadFromEeprom();
+      Serial.println(brightness);  // Output only the number for easy parsing
+    } else {
+      Serial.printf("Unknown command: %s\n", command.c_str());
+    }
+    return;
+  }
+
+  // Handle commands with values
   if (spaceIndex > 0) {
     String command = commandBuffer.substring(0, spaceIndex);
     String valueStr = commandBuffer.substring(spaceIndex + 1);
