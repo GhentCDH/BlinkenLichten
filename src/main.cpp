@@ -54,6 +54,7 @@ void setupSerial(){
   Serial.println("  brightness <0-100>  - Set brightness level");
   Serial.println("  rainbow <duration_ms> - Start rainbow effect for specified duration");
   Serial.println("  flashred <duration_ms> - Flash red effect for specified duration");
+  Serial.println("  flashgreen <duration_ms> - Flash green effect for specified duration");
   Serial.println("  comet <duration_ms> - Bouncing comet effect for specified duration");
   Serial.println("  twinkle <duration_ms> - Twinkle/sparkle effect for specified duration");
   Serial.println("  shutdown 0          - Turn off the lights");
@@ -107,6 +108,11 @@ void processCommand(String commandBuffer) {
       int duration = value == 0 ? 5000 : value ;
       flashRedEffect(duration);
       Serial.printf("Flash red effect for %d ms\n", duration);
+      setWarmWhite(loadFromEeprom());
+    } else if (command == "flashgreen") {
+      int duration = value == 0 ? 5000 : value ;
+      flashGreenEffect(duration);
+      Serial.printf("Flash green effect for %d ms\n", duration);
       setWarmWhite(loadFromEeprom());
     } else if (command == "comet") {
       int duration = value == 0 ? 5000 : value ;
@@ -191,6 +197,17 @@ void flashRedEffect(int duration_ms) {
   unsigned long startTime = millis();
   while (millis() - startTime < duration_ms) {
     showAll(CRGB::Red);
+    delay(100);
+    showAll(CRGB::Black);
+    delay(100);
+  }
+  showAll(CRGB::Black);
+}
+
+void flashGreenEffect(int duration_ms) {
+  unsigned long startTime = millis();
+  while (millis() - startTime < duration_ms) {
+    showAll(CRGB::Green);
     delay(100);
     showAll(CRGB::Black);
     delay(100);

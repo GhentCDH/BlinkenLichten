@@ -166,6 +166,7 @@
     
     <div class="button-group">
       <button class="btn-shutdown" onclick="triggerFlashRed()">Flash Red</button>
+      <button class="btn-shutdown" onclick="triggerFlashGreen()">Flash Green</button>
       <button class="btn-shutdown" onclick="triggerRainbow()">Rainbow Effect</button>
       <button class="btn-shutdown" onclick="triggerComet()">Comet</button>
       <button class="btn-shutdown" onclick="triggerTwinkle()">Twinkle</button>
@@ -207,6 +208,11 @@
     
     function triggerFlashRed() {
       fetch('/flashred', { method: 'POST' })
+        .catch(function(err) { console.error('Error:', err); });
+    }
+
+    function triggerFlashGreen() {
+      fetch('/flashgreen', { method: 'POST' })
         .catch(function(err) { console.error('Error:', err); });
     }
 
