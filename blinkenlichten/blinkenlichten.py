@@ -30,8 +30,8 @@ except ImportError:  # Provide a graceful fallback so the server can start witho
 
 
 # Configuration
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 55155
-SERIAL_DEVICE = sys.argv[2] if len(sys.argv) > 2 else '/dev/cu.usbserial-0001'
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 55156
+SERIAL_DEVICE = sys.argv[2] if len(sys.argv) > 2 else '/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0'
 SERIAL_BAUDRATE = 115200
 WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', '')
 
@@ -300,7 +300,7 @@ class SerialHandler(BaseHTTPRequestHandler):
             return
         
         command = None
-        
+        print(path)
         # Handle different endpoints
         if path == '/rainbow':
             duration = params.get('duration', ['5000'])[0]
