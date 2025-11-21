@@ -9,12 +9,12 @@ import json
 import hmac
 import hashlib
 import re
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 
 
 # Conventional Commits types as per https://www.conventionalcommits.org/
 CONVENTIONAL_TYPES = {
-    'feat', 'fix', 'chore', 'docs', 'style',
+    'feat', 'fix', 'chore', 'docs', 'style', 'merge'
     'refactor', 'perf', 'test', 'build', 'ci', 'revert'
 }
 
@@ -107,7 +107,7 @@ def is_conventional_commit(message: str) -> Dict[str, Any]:
             'commit_type': None,
             'scope': None,
             'message': first_line,
-            'error': f'Does not match Conventional Commits format (type(scope)?: description)'
+            'error': 'Does not match Conventional Commits format (type(scope)?: description)'
         }
 
     commit_type = match.group(1)
