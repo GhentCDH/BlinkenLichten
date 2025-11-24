@@ -16,6 +16,7 @@ void setWarmWhite(int brightness);
 void saveToEeprom(int brightness);
 int loadFromEeprom();
 void rainbowSnakeEffect(int duration_ms);
+void flashColorEffect(int duration_ms, CRGB color);
 void flashRedEffect(int duration_ms);
 void flashGreenEffect(int duration_ms);
 void cometEffect(int duration_ms);
@@ -331,39 +332,48 @@ void rainbowSnakeEffect(int duration_ms) {
   }
 }
 
-
-void flashRedEffect(int duration_ms) {
+// Generic flash effect with configurable color and sine-wave pulsation
+void flashColorEffect(int duration_ms, CRGB color) {
   unsigned long startTime = millis();
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i].fadeToBlackBy(64);  // Gentle fade
+  }
+
   while (millis() - startTime < duration_ms && !stopCurrentEffect) {
-    takeLedMutex();
-    showAll(CRGB::Red);
-    giveLedMutex();
-    vTaskDelay(pdMS_TO_TICKS(100));
+    unsigned long elapsed = millis() - startTime;
 
-    if (stopCurrentEffect) break;
+    // Calculate angle for 2 complete pulses (0 to 2*PI)
+    float angle = 2.0 * PI * (float) elapsed / (float) duration_ms;
+    float brightnessFactor = (sin(angle) + 1.0) / 2.0;  // Maps to 0.0→1.0→0.0
 
+    // Scale input color by brightness
+    CRGB scaledColor = color;
+    scaledColor.r = (uint8_t)(color.r * brightnessFactor);
+    scaledColor.g = (uint8_t)(color.g * brightnessFactor);
+    scaledColor.b = (uint8_t)(color.b * brightnessFactor);
+
+    // Update LEDs with smooth brightness
     takeLedMutex();
-    showAll(CRGB::Black);
+    fill_solid(leds, NUM_LEDS, scaledColor);
+    FastLED.show();
     giveLedMutex();
-    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // Update more frequently for smooth animation (15ms)
+    vTaskDelay(pdMS_TO_TICKS(15));
+  }
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i].fadeToBlackBy(64);  // Gentle fade
   }
 }
 
+void flashRedEffect(int duration_ms) {
+  flashColorEffect(duration_ms, CRGB::Red);
+}
+
 void flashGreenEffect(int duration_ms) {
-  unsigned long startTime = millis();
-  while (millis() - startTime < duration_ms && !stopCurrentEffect) {
-    takeLedMutex();
-    showAll(CRGB::Green);
-    giveLedMutex();
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    if (stopCurrentEffect) break;
-
-    takeLedMutex();
-    showAll(CRGB::Black);
-    giveLedMutex();
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
+  flashColorEffect(duration_ms, CRGB::Green);
 }
 
 // Comet effect - bouncing color-shifting comet with sparkly trail
