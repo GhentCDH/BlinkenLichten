@@ -34,6 +34,8 @@ void effectTaskFunction(void* parameter);
 // ===============================================
 
 
+const int standard_duration_in_ms = 3000; // Default effect duration
+
 // Standard FastLED CRGB array
 CRGB leds[NUM_LEDS];
 
@@ -234,19 +236,19 @@ void processCommand(String commandBuffer) {
       saveToEeprom(value); // Save brightness to EEPROM
       Serial.printf("Brightness set to: %d\n", value);
     } else if (command == "rainbow") {
-      int duration = value == 0 ? 5000 : value;
+      int duration = value == 0 ? standard_duration_in_ms : value;
       startEffectTask(EFFECT_RAINBOW, duration);
     } else if (command == "flashred") {
-      int duration = value == 0 ? 5000 : value;
+      int duration = value == 0 ? standard_duration_in_ms : value;
       startEffectTask(EFFECT_FLASHRED, duration);
     } else if (command == "flashgreen") {
-      int duration = value == 0 ? 5000 : value;
+      int duration = value == 0 ? standard_duration_in_ms : value;
       startEffectTask(EFFECT_FLASHGREEN, duration);
     } else if (command == "comet") {
-      int duration = value == 0 ? 5000 : value;
+      int duration = value == 0 ? standard_duration_in_ms : value;
       startEffectTask(EFFECT_COMET, duration);
     } else if (command == "twinkle") {
-      int duration = value == 0 ? 5000 : value;
+      int duration = value == 0 ? standard_duration_in_ms : value;
       startEffectTask(EFFECT_TWINKLE, duration);
     } else if (command == "shutdown") {
       stopEffectTask();  // Stop any running effect first
