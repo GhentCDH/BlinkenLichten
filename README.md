@@ -99,31 +99,7 @@ uv sync
 uv run blinkenlichten.py
 ```
 
-Visit: http://localhost:55155/
-
-
----
-
-## 6. SSH reverse tunnel exposure
-
-Needed when GitHub cannot reach your local machine directly (NAT/firewall).
-
-Ensure on the remote host's `sshd_config`:
-```
-GatewayPorts yes
-```
-Reload sshd if changed.
-
-Create tunnel:
-```zsh
-ssh -N -R 0.0.0.0:55155:localhost:55155 user@remote.example.org
-```
-GitHub webhook URL becomes: `http://remote.example.org:55155/webhook`
-
-Persistent tunnel with autossh:
-```zsh
-autossh -M 0 -N -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -R 0.0.0.0:55155:localhost:55155 user@remote.example.org
-```
+Visit: http://localhost:55156/
 
 ## License
 MIT license
