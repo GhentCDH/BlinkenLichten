@@ -224,29 +224,33 @@
         .catch(function(err) { console.error('Error:', err); });
     }
     
-    function triggerRainbow() {
-      fetch('/rainbow', { method: 'POST' })
+    function triggerEffect(effectName, duration) {
+      var url = '/effect?name=' + effectName;
+      if (duration) {
+        url += '&duration=' + duration;
+      }
+      fetch(url, { method: 'POST' })
         .catch(function(err) { console.error('Error:', err); });
     }
-    
+
+    function triggerRainbow() {
+      triggerEffect('rainbow');
+    }
+
     function triggerFlashRed() {
-      fetch('/flashred', { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
+      triggerEffect('flashred');
     }
 
     function triggerFlashGreen() {
-      fetch('/flashgreen', { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
+      triggerEffect('flashgreen');
     }
 
     function triggerComet() {
-      fetch('/comet', { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
+      triggerEffect('comet');
     }
 
     function triggerTwinkle() {
-      fetch('/twinkle', { method: 'POST' })
-        .catch(function(err) { console.error('Error:', err); });
+      triggerEffect('twinkle');
     }
   </script>
 </body>

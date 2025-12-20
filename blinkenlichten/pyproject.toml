@@ -1,9 +1,11 @@
 [project]
 name = "blinkenlichten"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "LED controller via WLED JSON API with GitHub webhook integration"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "pyserial>=3.5",
-]
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
