@@ -9,7 +9,11 @@ import json
 import hmac
 import hashlib
 import re
+import logging
 from typing import Dict, List, Any, Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 # Conventional Commits types as per https://www.conventionalcommits.org/
@@ -370,10 +374,24 @@ def process_webhook(
         - 'message': str - Human-readable message
         - 'details': Dict - Event-specific details
     """
+    logger.info(
+        "process_webhook called: event=%s content_type=%s bytes=%d signature_present=%s secret_configured=%s",
+        event_type or "-",
+        content_type or "-",
+        len(raw_body) if raw_body is not None else 0,
+        bool(signature_header),
+        bool(webhook_secret),
+    )
+
     # Verify signature if secret is configured
     if webhook_secret:
         sig_result = verify_github_signature(raw_body, signature_header, webhook_secret)
         if not sig_result['valid']:
+            logger.warning(
+                "Signature verification failed: event=%s error=%s",
+                event_type or "-",
+                sig_result.get('error'),
+            )
             return {
                 'status': 'error',
                 'status_code': 403,
@@ -386,7 +404,7 @@ def process_webhook(
                 }
             }
     else:
-        print("Warning: WEBHOOK_SECRET not set, skipping signature validation")
+        logger.warning("WEBHOOK_SECRET not set; skipping signature validation")
 
     # Parse JSON payload based on content type
     payload_json_bytes: Optional[bytes] = None
@@ -429,6 +447,7 @@ def process_webhook(
     try:
         payload = json.loads(payload_json_bytes.decode('utf-8'))
     except json.JSONDecodeError as e:
+        logger.warning("Invalid JSON in payload: %s", str(e))
         return {
             'status': 'error',
             'status_code': 400,
@@ -442,6 +461,11 @@ def process_webhook(
     if event_type == 'workflow_run':
         result = process_workflow_run_event(payload)
         if result['should_trigger']:
+            logger.info(
+                "workflow_run handled: status=success effect=%s duration_ms=%s",
+                result.get('effect'),
+                result.get('duration'),
+            )
             return {
                 'status': 'success',
                 'status_code': 200,
@@ -451,6 +475,7 @@ def process_webhook(
                 'details': result['workflow']
             }
         else:
+            logger.info("workflow_run handled: status=no_action reason=%s", result.get('reason'))
             return {
                 'status': 'no_action',
                 'status_code': 200,
@@ -463,6 +488,11 @@ def process_webhook(
     elif event_type == 'push':
         result = process_push_event(payload)
         if result['should_trigger']:
+            logger.info(
+                "push handled: status=success effect=%s duration_ms=%s",
+                result.get('effect'),
+                result.get('duration'),
+            )
             return {
                 'status': 'success',
                 'status_code': 200,
@@ -475,6 +505,7 @@ def process_webhook(
                 }
             }
         else:
+            logger.info("push handled: status=no_action reason=%s", result.get('reason'))
             return {
                 'status': 'no_action',
                 'status_code': 200,
@@ -485,6 +516,7 @@ def process_webhook(
             }
 
     else:
+        logger.warning("Unsupported event type: %s", event_type)
         return {
             'status': 'error',
             'status_code': 400,

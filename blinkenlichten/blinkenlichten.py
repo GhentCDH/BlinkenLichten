@@ -8,10 +8,14 @@ import os
 import json
 import time
 import threading
+import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import github_webhook
 import wled
+
+
+logger = logging.getLogger(__name__)
 
 
 # Configuration
@@ -118,6 +122,11 @@ class SerialHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f'Error: {str(e)}'.encode())
         elif path == '/webhook':
             # Accept webhook payload via GET for testing purposes (no signature validation)
+            logger.info(
+                "Webhook request arrived (GET test mode): client=%s path=%s",
+                self.client_address[0],
+                self.path,
+            )
             payload_param = params.get('payload', [None])[0]
             payload_body = None
             if payload_param:
@@ -150,11 +159,17 @@ class SerialHandler(BaseHTTPRequestHandler):
 
             # Trigger effect if determined
             if result['effect']:
-                print(f"Webhook (GET): {result['message']} -> {result['effect']}")
+                logger.info(
+                    "Webhook processed (GET): status=%s effect=%s duration_ms=%s message=%s",
+                    result.get('status'),
+                    result.get('effect'),
+                    result.get('duration'),
+                    result.get('message'),
+                )
                 try:
                     self._trigger_effect_with_restoration(result['effect'], result['duration'])
                 except wled.WLEDError as e:
-                    print(f"WLED Error: {e}")
+                    logger.exception("WLED error while triggering effect")
 
             # Respond
             self.send_response(result['status_code'])
@@ -180,14 +195,24 @@ class SerialHandler(BaseHTTPRequestHandler):
         
         # Handle GitHub webhook
         if path == '/webhook':
+            delivery_id = self.headers.get('X-GitHub-Delivery', '')
+            signature_header = self.headers.get('X-Hub-Signature-256', '')
+            event_type = self.headers.get('X-GitHub-Event', '')
+            content_type = self.headers.get('Content-Type', '')
+
             # Read raw body (used for signature verification)
             content_length = int(self.headers.get('Content-Length', 0))
             raw_body = self.rfile.read(content_length)
 
-            # Get headers
-            signature_header = self.headers.get('X-Hub-Signature-256', '')
-            event_type = self.headers.get('X-GitHub-Event', '')
-            content_type = self.headers.get('Content-Type', '')
+            logger.info(
+                "Webhook request arrived: method=POST client=%s delivery=%s event=%s content_type=%s bytes=%d signature_present=%s",
+                self.client_address[0],
+                delivery_id or "-",
+                event_type or "-",
+                content_type or "-",
+                len(raw_body),
+                bool(signature_header),
+            )
 
             # Process webhook using the github_webhook module
             result = github_webhook.process_webhook(
@@ -199,24 +224,37 @@ class SerialHandler(BaseHTTPRequestHandler):
             )
 
             # Log the result
-            print(f"Webhook ({event_type}): {result['message']}")
+            logger.info(
+                "Webhook processed: delivery=%s event=%s status=%s code=%s effect=%s duration_ms=%s message=%s",
+                delivery_id or "-",
+                event_type or "-",
+                result.get('status'),
+                result.get('status_code'),
+                result.get('effect'),
+                result.get('duration'),
+                result.get('message'),
+            )
             if result['status'] == 'error':
-                print(f"  Error details: {result['details']}")
+                logger.warning("Webhook error details: %s", result.get('details'))
             elif result['effect']:
-                print(f"  Effect: {result['effect']} for {result['duration']}ms")
+                logger.info(
+                    "Webhook effect selected: effect=%s duration_ms=%s",
+                    result.get('effect'),
+                    result.get('duration'),
+                )
                 if 'validation' in result['details']:
                     validation = result['details']['validation']
                     if validation.get('errors'):
-                        print(f"  Validation errors:")
+                        logger.info("Webhook validation errors: count=%d", len(validation['errors']))
                         for error in validation['errors']:
-                            print(f"    - {error['commit_id']}: {error['error']}")
+                            logger.info("  - %s: %s", error.get('commit_id'), error.get('error'))
 
             # Trigger effect if determined
             if result['effect']:
                 try:
                     self._trigger_effect_with_restoration(result['effect'], result['duration'])
                 except wled.WLEDError as e:
-                    print(f"WLED Error: {e}")
+                    logger.exception("WLED error while triggering effect")
 
             # Respond to GitHub
             self.send_response(result['status_code'])
@@ -298,9 +336,13 @@ class SerialHandler(BaseHTTPRequestHandler):
             self.wfile.write(f'Invalid parameter: {str(e)}'.encode())
 
     def log_message(self, format, *args):
-        print(f"{self.address_string()} - {format % args}")
+        logger.info("%s - %s", self.address_string(), format % args)
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+    )
     print("Starting BlinkenLichten HTTP to WLED bridge...")
     print(f"Listening on port: {PORT}")
     print(f"WLED endpoint: {WLED_ENDPOINT}")
