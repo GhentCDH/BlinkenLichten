@@ -1,19 +1,19 @@
 # BlinkenLichten
 
-> ESP32-controlled LED strip with a Python HTTP bridge, webhook-driven effects, and a minimalist web UI.
+> WLED-controlled LED strip with a Python HTTP bridge, webhook-driven effects, and a minimalist web UI.
 
-BlinkenLichten lets you control an addressable LED strip attached to an ESP32 using simple serial commands. 
+BlinkenLichten lets you control an addressable LED strip using WLED's JSON API.
 
-A Python webserver exposes HTTP endpoints (and a basic HTML page) and reacts to GitHub push webhooks with some processing behind it:
+A Python webserver exposes HTTP endpoints (and a basic HTML page) and reacts to GitHub webhooks with some processing behind it:
 
-* For a push message it checks the commit messages. If tit follows the Conventional Commits specification you get a celebratory rainbow; if any commit breaks the rules the strip flashes red.
-* For succesfully finished workflows, the led strip reacts with green flashes.
+* For a push message it checks the commit messages. If it follows the Conventional Commits specification you get a celebratory rainbow; if any commit breaks the rules the strip flashes red.
+* For successfully finished workflows, the led strip reacts with green flashes.
 
 
 ## 1. Overview & architecture
 
-- ESP32 runs the sketch in `src/main.cpp` (FastLED + EEPROM persistence).
-- Host machine runs `blinkenlichten/blinkenlichten.py` bridging HTTP → Serial.
+- WLED device controls the LED strip via its JSON API.
+- Host machine runs `blinkenlichten/blinkenlichten.py` bridging HTTP → WLED JSON API.
 - GitHub sends webhook events & selects effect.
 
 
@@ -21,44 +21,45 @@ A Python webserver exposes HTTP endpoints (and a basic HTML page) and reacts to 
 
 ---
 
-## 2. ESP32 firmware (PlatformIO)
+## 2. WLED Configuration
 
-Location: `src/main.cpp`. Key features:
-- FastLED with RGBW emulation.
-- EEPROM storage of last brightness (0–100) at address 0.
-- Effects: Rainbow snake, Flash Red, Warm White, Flash Green, Comet, Shutdown.
-- Serial baud: 115200.
+BlinkenLichten communicates with a WLED device via its JSON API:
 
-Build & upload using platfromio
+- **Endpoint**: Configure via `WLED_ENDPOINT` environment variable
+- **Default**: `http://wled.local` (mDNS hostname)
+- **API documentation**: https://kno.wled.ge/interfaces/json-api/
 
-## 3. Serial command protocol
+### Effect Mapping
 
-Commands are ASCII lines ending with `\n`:
+The Python server maps HTTP commands to WLED effects:
 
-| Command | Value | Description |
-|---------|-------|-------------|
-| `brightness <0-100>` | 0–100 | Set warm white brightness & persist to EEPROM |
-| `rainbow <ms>` | duration (0 → 5000 default) | Run rainbow snake then restore brightness |
-| `flashred <ms>` | duration (0 → 5000 default) | Flash red pattern then restore brightness |
-| `shutdown 0  | 0 | Turn all LEDs off |
-| `on  <0-100>` | brightness | Turn on & restore / set brightness |
-| `getbrightness` |  | returns the current brightness level |
+| HTTP Command | WLED Effect | Details |
+|--------------|-------------|---------|
+| `flashred` | Breathe (ID 2) | Red color (255, 0, 0) |
+| `flashgreen` | Breathe (ID 2) | Green color (0, 255, 0) |
+| `rainbow` | Rainbow (ID 9) | Full rainbow effect |
+| `brightness` | RGBW W channel | Warm white via W channel (0-100% → 0-255) |
+| `comet` | Rainbow (ID 9) | Mapped to rainbow (no exact equivalent) |
+| `twinkle` | Rainbow (ID 9) | Mapped to rainbow (no exact equivalent) |
 
-The Python bridge sends exactly these strings followed by `\n`.
+**Effect Duration**: Effects run for the specified duration, then the server automatically restores the W channel to the saved brightness level.
+
+**Brightness Storage**: Brightness is stored in-memory (default: 50%). This resets when the Python server restarts.
 
 ---
 
-## 4. Python webserver
+## 3. Python webserver
 
 File: `blinkenlichten/blinkenlichten.py`
 
-Start (defaults: port 55155, device `/dev/cu.usbserial-0001`):
+Start (defaults: port 55156, WLED endpoint `http://wled.local`):
 ```zsh
+export WLED_ENDPOINT="http://wled.local"  # or use IP address
 uv run blinkenlichten.py
 ```
-Custom port/device:
+Custom port:
 ```zsh
-uv run blinkenlichten.py 55155 /dev/cu.usbserial-0001
+uv run blinkenlichten.py 8080
 ```
 
 ### Endpoints
@@ -66,10 +67,14 @@ uv run blinkenlichten.py 55155 /dev/cu.usbserial-0001
 |--------|------|-------|---------|
 | GET | `/` | - | Serve simple HTML control page |
 | GET/POST | `/rainbow` | `duration=<ms>` | Trigger rainbow effect |
-| POST | `/flashred` | `duration=<ms>` | Trigger flash red effect |
-| POST | `/on` | - | Turn lights on (restore EEPROM brightness) |
+| POST | `/flashred` | `duration=<ms>` | Trigger breathe red effect |
+| POST | `/flashgreen` | `duration=<ms>` | Trigger breathe green effect |
+| POST | `/comet` | `duration=<ms>` | Trigger effect (mapped to rainbow) |
+| POST | `/twinkle` | `duration=<ms>` | Trigger effect (mapped to rainbow) |
+| GET | `/brightness` | - | Get current brightness from memory |
+| POST | `/brightness` | `brightness=<0-100>` | Set W channel brightness |
+| POST | `/on` | - | Turn lights on (restore saved brightness) |
 | POST | `/off` / `/shutdown` | - | Turn lights off |
-| POST | `/brightness` | `brightness=<0-100>` | Set brightness |
 | POST | `/webhook` | - | GitHub push webhook (signature + commit checks) |
 | GET | `/webhook` | `payload=<json>` | Testing webhook logic (no signature) |
 
@@ -86,20 +91,31 @@ uv run blinkenlichten.py 55155 /dev/cu.usbserial-0001
 
 ---
 
-## 5. Installation & running
+## 4. Installation & running
 
 ### Requirements
 - Python 3.10+
-- PlatformIO (ESP32 build/upload)
-- `pyserial` (recommended for real hardware) → install with `pip install pyserial`
+- WLED device on the network (with mDNS hostname `wled.local` or accessible IP address)
+- No external Python dependencies (uses stdlib only)
 
 ### Using uv (recommended)
 ```zsh
-uv sync
+# Set WLED endpoint
+export WLED_ENDPOINT="http://wled.local"  # or "http://192.168.1.100"
+
+# Optional: Set webhook secret for GitHub webhooks
+export WEBHOOK_SECRET="your-github-webhook-secret"
+
+# Start server
 uv run blinkenlichten.py
 ```
 
 Visit: http://localhost:55156/
+
+### Configuration
+- `WLED_ENDPOINT`: WLED device URL (default: `http://wled.local`)
+- `WEBHOOK_SECRET`: GitHub webhook secret for signature validation (optional but recommended)
+- Port: First command-line argument (default: 55156)
 
 ## License
 MIT license
