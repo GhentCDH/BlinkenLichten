@@ -14,12 +14,15 @@ from typing import Dict, List, Any, Optional
 
 # Conventional Commits types as per https://www.conventionalcommits.org/
 CONVENTIONAL_TYPES = {
-    'feat', 'fix', 'chore', 'docs', 'style', 'merge'
-    'refactor', 'perf', 'test', 'build', 'ci', 'revert'
+    'feat', 'fix', 'chore', 'docs', 'style', 'merge',
+    'refactor', 'perf', 'test', 'build', 'ci', 'revert', 'wip'
 }
 
 # Regex patterns
-CONVENTIONAL_COMMIT_PATTERN = re.compile(r'^(\w+)(\([^\)]+\))?!?:\s+.+')
+CONVENTIONAL_COMMIT_PATTERN = re.compile(
+    r'^(\w+)(\([^\)]+\))?!?:\s+.+',
+    flags=re.IGNORECASE,
+)
 VERSION_TAG_PATTERN = re.compile(r'^v?\d+\.\d+\.\d+.*$')
 
 
@@ -110,7 +113,7 @@ def is_conventional_commit(message: str) -> Dict[str, Any]:
             'error': 'Does not match Conventional Commits format (type(scope)?: description)'
         }
 
-    commit_type = match.group(1)
+    commit_type = match.group(1).lower()
     scope = match.group(2)  # Will be None or "(scope)" with parentheses
 
     # Clean up scope (remove parentheses)
