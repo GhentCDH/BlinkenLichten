@@ -99,6 +99,9 @@ uv run blinkenlichten.py 8080
 - No external Python dependencies (uses stdlib only)
 
 ### Using uv (recommended)
+
+To configure the webhook go to your /settings/hooks page on github to configure. For this organisation https://github.com/organizations/GhentCDH/settings/hooks 
+
 ```zsh
 # Set WLED endpoint
 export WLED_ENDPOINT="http://wled.local"  # or "http://192.168.1.100"
