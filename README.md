@@ -117,10 +117,142 @@ Visit: http://localhost:55156/
 - `WEBHOOK_SECRET`: GitHub webhook secret for signature validation (optional but recommended)
 - Port: First command-line argument (default: 55156)
 
+## 5. Container deployment
+
+The production service runs as the rootless `ghentcdh` user on `dash`. A Podman
+Quadlet publishes host port 80 to port 55156 in the container and starts the
+service automatically after a reboot.
+
+The tracked `blinkenlichten.container` is a template. Its environment variables
+are defined directly in the Quadlet as required, but `WEBHOOK_SECRET` is empty so
+that credentials are never committed to Git. Set the secret in the deployed copy
+before starting the service.
+
+### One-time server setup
+
+These are the only commands that require `sudo`:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y podman uidmap passt
+
+printf '%s\n' 'net.ipv4.ip_unprivileged_port_start=79' \
+  | sudo tee /etc/sysctl.d/90-rootless-low-ports.conf >/dev/null
+sudo sysctl --system
+sudo loginctl enable-linger ghentcdh
+```
+
+The persistent sysctl permits rootless services to bind ports 79 and above.
+User lingering starts the Quadlet at boot without requiring an interactive login.
+
+### Build and transfer
+
+Run these commands from the repository root. `--platform linux/amd64` is used for
+both the build and archive export so the ARM image from a development machine is
+never transferred to the x86 server.
+
+```sh
+docker buildx build \
+  --platform linux/amd64 \
+  --load \
+  --tag localhost/blinkenlichten:0.2.0-amd64 \
+  .
+
+docker image inspect \
+  localhost/blinkenlichten:0.2.0-amd64 \
+  --format '{{.Architecture}}'
+
+docker image save \
+  --platform linux/amd64 \
+  localhost/blinkenlichten:0.2.0-amd64 \
+  | ssh ghentcdh@dash podman load
+```
+
+The architecture printed by `docker image inspect` must be `amd64` before the
+image is transferred.
+
+### Install the Quadlet
+
+```sh
+ssh ghentcdh@dash 'mkdir -p ~/.config/containers/systemd'
+
+scp blinkenlichten.container \
+  ghentcdh@dash:/home/ghentcdh/.config/containers/systemd/blinkenlichten.container
+
+ssh -t ghentcdh@dash \
+  'chmod 600 ~/.config/containers/systemd/blinkenlichten.container && sensible-editor ~/.config/containers/systemd/blinkenlichten.container'
+```
+
+In the remote editor, replace the empty value below with the GitHub webhook
+secret shared with this service:
+
+```ini
+Environment="WEBHOOK_SECRET=replace-with-the-shared-secret"
+```
+
+Then reload and start the generated user service:
+
+```sh
+ssh ghentcdh@dash 'systemctl --user daemon-reload'
+ssh ghentcdh@dash 'systemctl --user restart blinkenlichten.service'
+```
+
+Do not run `systemctl enable` for the generated service. The Quadlet's
+`WantedBy=default.target` declaration and user lingering handle boot startup.
+
+### Verify the deployment
+
+```sh
+ssh ghentcdh@dash 'systemctl --user status blinkenlichten.service'
+ssh ghentcdh@dash 'podman ps --filter name=systemd-blinkenlichten'
+ssh ghentcdh@dash 'podman image inspect localhost/blinkenlichten:0.2.0-amd64 --format "{{.Architecture}}"'
+curl --noproxy '*' --fail http://gcdhdash/
+```
+
+The service is available at `http://gcdhdash/` and
+`http://gcdhdash.ugent.be/`.
+
+View service logs with:
+
+```sh
+ssh ghentcdh@dash 'journalctl --user -u blinkenlichten.service -f'
+```
+
+To locate an HTTP device such as WLED on the IoT subnet without installing
+additional tools:
+
+```sh
+ssh ghentcdh@dash \
+  'seq 1 254 | xargs -P 32 -I{} sh -c '\''nc -z -w 1 192.168.4.{} 80 && echo 192.168.4.{}:80 open'\'''
+```
+
+The current WLED device is reachable at `http://192.168.4.80` and is configured
+as `WLED_ENDPOINT` directly in `blinkenlichten.container`.
+
+### Deploy an update
+
+Rebuild and transfer the same amd64-only tag, then restart the Quadlet. Do not
+copy the Quadlet template again unless its configuration changed, because doing
+so replaces the deployed webhook secret with the empty template value.
+
+```sh
+docker buildx build \
+  --platform linux/amd64 \
+  --load \
+  --tag localhost/blinkenlichten:0.2.0-amd64 \
+  .
+
+docker image save \
+  --platform linux/amd64 \
+  localhost/blinkenlichten:0.2.0-amd64 \
+  | ssh ghentcdh@dash podman load
+
+ssh ghentcdh@dash 'systemctl --user restart blinkenlichten.service'
+```
+
 ## License
 MIT license
 
 ## Credits
 
 Developed for GhentCDH.
-

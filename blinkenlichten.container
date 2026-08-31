@@ -1,0 +1,16 @@
+[Unit]
+Description=BlinkenLichten WLED bridge
+
+[Container]
+Image=localhost/blinkenlichten:0.2.0-amd64
+Pull=never
+PublishPort=80:55156/tcp
+Environment=PORT=55156
+Environment=WLED_ENDPOINT=http://192.168.4.80
+Environment="WEBHOOK_SECRET="
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
