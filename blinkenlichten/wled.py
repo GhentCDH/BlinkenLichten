@@ -84,7 +84,8 @@ class WLEDController:
         self._send_request(payload)
         print(f"WLED: Set brightness to {brightness}% (W={wled_brightness})")
 
-    def _set_effect(self, effect_id: int, effect_name: str, color_rgb: Optional[tuple] = None) -> None:
+    def _set_effect(self, effect_id: int, effect_name: str, color_rgb: Optional[tuple] = None,
+                    palette_id: Optional[int] = None) -> None:
         """
         Set a WLED effect with optional color.
 
@@ -93,11 +94,14 @@ class WLEDController:
             effect_name: Human-readable effect name for logging
             duration_ms: Duration in milliseconds (for logging only, handled by caller)
             color_rgb: Optional tuple of (R, G, B) values (0-255)
+            palette_id: Optional WLED palette ID (0 = Default, uses the segment color)
         """
         segment: Dict[str, Any] = {"fx": effect_id}
         if color_rgb is not None:
             r, g, b = color_rgb
             segment["col"] = [[r, g, b, 0]]  # RGB color with W=0
+        if palette_id is not None:
+            segment["pal"] = palette_id
 
         payload = {"on": True, "seg": [segment]}
         self._send_request(payload)
@@ -111,18 +115,19 @@ class WLEDController:
     def set_effect_breathe(self, color_rgb: tuple) -> None:
         """
         Trigger Breathe effect (ID 2) with specified color.
+        Uses the Default palette (0) so the color is not overridden by the device palette.
 
         Args:
             color_rgb: Tuple of (R, G, B) values (0-255)
             duration_ms: Duration in milliseconds (for logging only, handled by caller)
         """
-        self._set_effect(effect_id=2, effect_name="Breathe", color_rgb=color_rgb)
+        self._set_effect(effect_id=2, effect_name="Breathe", color_rgb=color_rgb, palette_id=0)
 
     def set_effect_rainbow(self) -> None:
         """
-        Trigger Rainbow effect (ID 9).        
+        Trigger Chase Rainbow effect (ID 30) with the "* Random Cycle" palette (ID 1).
         """
-        self._set_effect(effect_id=9, effect_name="Rainbow")
+        self._set_effect(effect_id=30, effect_name="Chase Rainbow", palette_id=1)
 
     def turn_on(self, brightness: Optional[int] = None) -> None:
         """
