@@ -85,7 +85,7 @@ class WLEDController:
         print(f"WLED: Set brightness to {brightness}% (W={wled_brightness})")
 
     def _set_effect(self, effect_id: int, effect_name: str, color_rgb: Optional[tuple] = None,
-                    palette_id: Optional[int] = None) -> None:
+                    palette_id: Optional[int] = None, colors: Optional[list] = None) -> None:
         """
         Set a WLED effect with optional color.
 
@@ -95,11 +95,15 @@ class WLEDController:
             duration_ms: Duration in milliseconds (for logging only, handled by caller)
             color_rgb: Optional tuple of (R, G, B) values (0-255)
             palette_id: Optional WLED palette ID (0 = Default, uses the segment color)
+            colors: Optional list of up to 3 (R, G, B) tuples for the segment color slots;
+                    overrides color_rgb and always sends W=0
         """
         segment: Dict[str, Any] = {"fx": effect_id}
         if color_rgb is not None:
             r, g, b = color_rgb
             segment["col"] = [[r, g, b, 0]]  # RGB color with W=0
+        if colors is not None:
+            segment["col"] = [[r, g, b, 0] for r, g, b in colors]  # W=0 so the white channel does not wash out the palette
         if palette_id is not None:
             segment["pal"] = palette_id
 
@@ -125,9 +129,14 @@ class WLEDController:
 
     def set_effect_rainbow(self) -> None:
         """
-        Trigger Chase Rainbow effect (ID 30) with the "* Random Cycle" palette (ID 1).
+        Trigger Chase Rainbow effect (ID 30) with the "Rainbow" palette (ID 11).
+
+        All three color slots are set explicitly with W=0: the brightness control leaves
+        the white channel on in slot 1, which would otherwise wash out the rainbow.
+        Slot 1 (white) and slot 2 (off) are the chase blocks moving over the palette.
         """
-        self._set_effect(effect_id=30, effect_name="Chase Rainbow", palette_id=1)
+        self._set_effect(effect_id=30, effect_name="Chase Rainbow", palette_id=11,
+                         colors=[(255, 255, 255), (0, 0, 0), (0, 0, 0)])
 
     def turn_on(self, brightness: Optional[int] = None) -> None:
         """
