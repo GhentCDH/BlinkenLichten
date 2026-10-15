@@ -138,6 +138,15 @@ class WLEDController:
         self._set_effect(effect_id=30, effect_name="Chase Rainbow", palette_id=11,
                          colors=[(255, 255, 255), (0, 0, 0), (0, 0, 0)])
 
+    def set_effect_red_snake(self) -> None:
+        """
+        Trigger Meteor effect (ID 76) in red: a red head with a fading tail running
+        along the strip. Default palette (0) so the segment color is used, W=0 so the
+        white channel does not wash out the red.
+        """
+        self._set_effect(effect_id=76, effect_name="Meteor (red snake)", palette_id=0,
+                         colors=[(255, 0, 0), (0, 0, 0), (0, 0, 0)])
+
     def turn_on(self, brightness: Optional[int] = None) -> None:
         """
         Turn on LEDs.

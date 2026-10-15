@@ -81,6 +81,8 @@ python3 blinkenlichten/test_webhook.py
 4. Validate each commit's first line against pattern: `type(scope)?: description`
 5. Trigger effect: all valid → `rainbow 5000`, any invalid → `flashred 5000`
 
+**Per-organisation effects:** orgs in `github_webhook.ORG_PUSH_EFFECTS` (currently `deeweemusicmachine` → `redsnake`, 8000 ms) skip commit validation. The org comes from `organization.login` or `repository.owner.login`. `redsnake` is WLED Meteor (fx 76) in red with W=0 (`WLEDController.set_effect_red_snake()`). `ping` events return 200.
+
 **Allowed commit types:**
 `feat`, `fix`, `chore`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`, `merge`
 

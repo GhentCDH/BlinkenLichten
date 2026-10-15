@@ -48,6 +48,7 @@ class SerialHandler(BaseHTTPRequestHandler):
         'flashgreen': {'default_duration': 5000, 'wled_effect': 'flashgreen'},
         'comet': {'default_duration': 10000, 'wled_effect': 'rainbow'},  # Mapped to rainbow
         'twinkle': {'default_duration': 5000, 'wled_effect': 'rainbow'},  # Mapped to rainbow
+        'redsnake': {'default_duration': 8000, 'wled_effect': 'redsnake'},
     }
 
     def _trigger_effect_with_restoration(self, effect: str, duration_ms: int) -> None:
@@ -55,12 +56,14 @@ class SerialHandler(BaseHTTPRequestHandler):
         Trigger an effect and schedule restoration to default state.
 
         Args:
-            effect: Effect name ('rainbow', 'flashred', 'flashgreen')
+            effect: Effect name ('rainbow', 'flashred', 'flashgreen', 'redsnake')
             duration_ms: Duration in milliseconds
         """
         # Trigger the effect
         if effect == 'rainbow':
             self.wled_controller.set_effect_rainbow()
+        elif effect == 'redsnake':
+            self.wled_controller.set_effect_red_snake()
         elif effect == 'flashred':
             self.wled_controller.set_effect_breathe((255, 0, 0))
         elif effect == 'flashgreen':
@@ -352,13 +355,14 @@ if __name__ == '__main__':
     else:
         print("GitHub webhook secret: NOT configured (set WEBHOOK_SECRET env var)")
     print("\nEndpoints:")
-    print("  POST /effect?name=<effect>&duration=<ms> - Trigger effect (rainbow, flashred, flashgreen, comet, twinkle)")
+    print("  POST /effect?name=<effect>&duration=<ms> - Trigger effect (rainbow, flashred, flashgreen, comet, twinkle, redsnake)")
     print("       Available effects:")
     print("         - rainbow (default 5000ms)")
     print("         - flashred (default 5000ms)")
     print("         - flashgreen (default 5000ms)")
     print("         - comet (default 10000ms)")
     print("         - twinkle (default 5000ms)")
+    print("         - redsnake (default 8000ms)")
     print("  GET  /rainbow?duration=<ms> - Trigger rainbow effect (default 5000ms)")
     print("  GET  /brightness - Get current brightness (from memory)")
     print("  POST /brightness?brightness=<0-100> - Set brightness (W channel)")

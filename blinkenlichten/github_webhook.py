@@ -29,6 +29,13 @@ CONVENTIONAL_COMMIT_PATTERN = re.compile(
 )
 VERSION_TAG_PATTERN = re.compile(r'^v?\d+\.\d+\.\d+.*$')
 
+# Organisations with a fixed push effect (lowercase login -> effect).
+# Pushes from these orgs skip Conventional Commits validation.
+ORG_PUSH_EFFECTS = {
+    'deeweemusicmachine': 'redsnake',
+}
+ORG_PUSH_EFFECT_DURATION = 8000
+
 
 def verify_github_signature(
     raw_body: bytes,
@@ -217,6 +224,25 @@ def extract_commits_from_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]
     return payload.get('commits', [])
 
 
+def extract_org(payload: Dict[str, Any]) -> str:
+    """
+    Get the organisation (or owner) login from a GitHub webhook payload.
+
+    Org webhooks include 'organization'; repository webhooks only have the
+    repository owner, so fall back to that.
+
+    Args:
+        payload: GitHub webhook payload
+
+    Returns:
+        Lowercase login, or '' if none found
+    """
+    login = (payload.get('organization') or {}).get('login')
+    if not login:
+        login = ((payload.get('repository') or {}).get('owner') or {}).get('login')
+    return (login or '').lower()
+
+
 def is_version_tag(ref: str) -> bool:
     """
     Check if a ref is a version tag (e.g., v1.0.0, 2.1.3).
@@ -324,6 +350,23 @@ def process_push_event(payload: Dict[str, Any]) -> Dict[str, Any]:
                 'errors': []
             },
             'reason': 'No commits in push event'
+        }
+
+    org = extract_org(payload)
+    if org in ORG_PUSH_EFFECTS:
+        return {
+            'should_trigger': True,
+            'effect': ORG_PUSH_EFFECTS[org],
+            'duration': ORG_PUSH_EFFECT_DURATION,
+            'validation': {
+                'all_valid': True,
+                'total_commits': len(commits),
+                'valid_commits': len(commits),
+                'invalid_commits': 0,
+                'errors': []
+            },
+            'org': org,
+            'reason': f'{len(commits)} commit(s) pushed to org "{org}"'
         }
 
     validation = validate_commits(commits)
@@ -458,7 +501,19 @@ def process_webhook(
         }
 
     # Process based on event type
-    if event_type == 'workflow_run':
+    if event_type == 'ping':
+        org = extract_org(payload)
+        logger.info("ping handled: org=%s hook_id=%s", org or "-", payload.get('hook_id'))
+        return {
+            'status': 'no_action',
+            'status_code': 200,
+            'effect': None,
+            'duration': 0,
+            'message': 'pong',
+            'details': {'org': org, 'hook_id': payload.get('hook_id')}
+        }
+
+    elif event_type == 'workflow_run':
         result = process_workflow_run_event(payload)
         if result['should_trigger']:
             logger.info(
@@ -489,7 +544,8 @@ def process_webhook(
         result = process_push_event(payload)
         if result['should_trigger']:
             logger.info(
-                "push handled: status=success effect=%s duration_ms=%s",
+                "push handled: status=success org=%s effect=%s duration_ms=%s",
+                extract_org(payload) or "-",
                 result.get('effect'),
                 result.get('duration'),
             )
@@ -500,6 +556,7 @@ def process_webhook(
                 'duration': result['duration'],
                 'message': result['reason'],
                 'details': {
+                    'org': extract_org(payload),
                     'validation': result['validation'],
                     'commits': result['validation']['total_commits']
                 }

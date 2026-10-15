@@ -11,6 +11,20 @@ When you push commits to your GitHub repository:
 4. If **all commits are valid** → **Rainbow effect** 🌈
 5. If **any commit is invalid** → **Flash red effect** 🔴
 
+## Per-organisation effects
+
+Pushes from organisations listed in `ORG_PUSH_EFFECTS` (`github_webhook.py`) skip
+the Conventional Commits check and always trigger a fixed effect:
+
+| Organisation | Effect | Duration |
+|--------------|--------|----------|
+| `deeweemusicmachine` | `redsnake`: WLED Meteor (fx 76) in red | 8000 ms |
+
+The organisation is read from `organization.login`, falling back to
+`repository.owner.login`. Pushes from any other organisation (such as `ghentcdh`)
+use the Conventional Commits rules below. All organisations share the same
+`WEBHOOK_SECRET` and payload URL. GitHub `ping` events return `200`.
+
 ## Conventional Commits
 
 Valid commit message formats:

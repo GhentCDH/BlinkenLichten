@@ -61,7 +61,7 @@ print("  ✓ PASSED\n")
 print("Test 4: Mixed valid/invalid commits")
 mixed_commits = [
     {"message": "feat: add feature", "id": "aaa111", "author": {"name": "Test"}},
-    {"message": "WIP: work in progress", "id": "bbb222", "author": {"name": "Test"}},  # Invalid
+    {"message": "work in progress", "id": "bbb222", "author": {"name": "Test"}},  # Invalid
 ]
 
 result = github_webhook.validate_commits(mixed_commits)
@@ -163,6 +163,50 @@ assert github_webhook.is_version_tag("1.2.3") == True, "Should match 1.2.3"
 assert github_webhook.is_version_tag("v2.1.0-beta") == True, "Should match v2.1.0-beta"
 assert github_webhook.is_version_tag("main") == False, "Should not match 'main'"
 assert github_webhook.is_version_tag("feature-branch") == False, "Should not match 'feature-branch'"
+print("  ✓ PASSED\n")
+
+# Test 9: Org-specific push effect (deeweemusicmachine -> redsnake, no validation)
+print("Test 9: deeweemusicmachine push triggers redsnake")
+org_payload = {
+    "organization": {"login": "DeeweeMusicMachine"},
+    "commits": [{"id": "abc1234", "message": "random message", "author": {"name": "Test"}}]
+}
+result = github_webhook.process_webhook(
+    raw_body=json.dumps(org_payload).encode('utf-8'),
+    signature_header='', event_type='push', content_type='application/json')
+print(f"  Effect: {result['effect']}, Message: {result['message']}")
+assert result['status'] == 'success', "Expected success"
+assert result['effect'] == 'redsnake', "Expected redsnake effect for deeweemusicmachine"
+assert result['duration'] == 8000, "Expected 8000ms duration"
+assert result['details']['org'] == 'deeweemusicmachine', "Expected org in details"
+print("  ✓ PASSED\n")
+
+# Test 10: Org from repository owner when 'organization' is missing
+print("Test 10: Org fallback to repository.owner.login")
+assert github_webhook.extract_org({"repository": {"owner": {"login": "deeweemusicmachine"}}}) == 'deeweemusicmachine'
+assert github_webhook.extract_org({}) == ''
+result = github_webhook.process_push_event({
+    "repository": {"owner": {"login": "deeweemusicmachine"}},
+    "commits": [{"message": "feat: x"}]})
+assert result['effect'] == 'redsnake', "Expected redsnake via repository owner"
+print("  ✓ PASSED\n")
+
+# Test 11: Other orgs keep Conventional Commits behaviour
+print("Test 11: ghentcdh push keeps rainbow/flashred")
+ok = github_webhook.process_push_event({
+    "organization": {"login": "ghentcdh"}, "commits": [{"message": "feat: x"}]})
+bad = github_webhook.process_push_event({
+    "organization": {"login": "ghentcdh"}, "commits": [{"message": "random"}]})
+assert ok['effect'] == 'rainbow', "Expected rainbow for valid ghentcdh commits"
+assert bad['effect'] == 'flashred', "Expected flashred for invalid ghentcdh commits"
+print("  ✓ PASSED\n")
+
+# Test 12: Ping event
+print("Test 12: ping event returns 200")
+result = github_webhook.process_webhook(
+    raw_body=json.dumps({"zen": "Keep it simple.", "hook_id": 1, "organization": {"login": "deeweemusicmachine"}}).encode('utf-8'),
+    signature_header='', event_type='ping', content_type='application/json')
+assert result['status_code'] == 200 and result['effect'] is None, "Expected 200 no_action for ping"
 print("  ✓ PASSED\n")
 
 print("=" * 50)
